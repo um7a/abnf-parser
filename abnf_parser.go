@@ -101,7 +101,7 @@ func CreateFindValueRangeAlternatives(rangeStart byte, rangeEnd byte) FindFunc {
 // number, including zero; 1*<element> requires at least one;
 // 3*3<element> allows exactly 3; and 1*2<element> allows one or two.
 
-func CreateFindVariableRepetition(min int, max int, finder FindFunc) FindFunc {
+func CreateFindVariableRepetitionMinMax(min int, max int, finder FindFunc) FindFunc {
 	findVariableRepetition := func(data []byte) (found bool, end int) {
 		matchCount := 0
 		for {
@@ -134,12 +134,18 @@ func CreateFindVariableRepetition(min int, max int, finder FindFunc) FindFunc {
 
 func CreateFindVariableRepetitionMin(min int, finder FindFunc) FindFunc {
 	max := -1
-	return CreateFindVariableRepetition(min, max, finder)
+	return CreateFindVariableRepetitionMinMax(min, max, finder)
 }
 
 func CreateFindVariableRepetitionMax(max int, finder FindFunc) FindFunc {
 	min := 0
-	return CreateFindVariableRepetition(min, max, finder)
+	return CreateFindVariableRepetitionMinMax(min, max, finder)
+}
+
+func CreateFindVariableRepetition(finder FindFunc) FindFunc {
+	min := 0
+	max := -1
+	return CreateFindVariableRepetitionMinMax(min, max, finder)
 }
 
 // RFC5234 - 3.7. Specific Repetition: nRule
@@ -155,7 +161,7 @@ func CreateFindVariableRepetitionMax(max int, finder FindFunc) FindFunc {
 func CreateFindSpecificRepetition(count int, finder FindFunc) FindFunc {
 	min := count
 	max := count
-	return CreateFindVariableRepetition(min, max, finder)
+	return CreateFindVariableRepetitionMinMax(min, max, finder)
 }
 
 // RFC5234 - 3.8. Optional Sequence: [RULE]
@@ -171,7 +177,7 @@ func CreateFindSpecificRepetition(count int, finder FindFunc) FindFunc {
 func CreateFindOptionalSequence(finder FindFunc) FindFunc {
 	min := 0
 	max := 1
-	return CreateFindVariableRepetition(min, max, finder)
+	return CreateFindVariableRepetitionMinMax(min, max, finder)
 }
 
 // RFC5234 - B.1. Core Rules

@@ -271,7 +271,7 @@ func TestCreateFindValueRangeAlternatives(t *testing.T) {
 	}
 }
 
-func TestCreateFindVariableRepetition(t *testing.T) {
+func TestCreateFindVariableRepetitionMinMax(t *testing.T) {
 	type TestCase struct {
 		testName      string
 		data          []byte
@@ -350,7 +350,7 @@ func TestCreateFindVariableRepetition(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.testName, func(t *testing.T) {
-			findVariableRepetitionMinMax := CreateFindVariableRepetition(testCase.min, testCase.max, testCase.finder)
+			findVariableRepetitionMinMax := CreateFindVariableRepetitionMinMax(testCase.min, testCase.max, testCase.finder)
 			actualFound, actualEnd := findVariableRepetitionMinMax(testCase.data)
 			equals(testCase.testName, t, testCase.expectedFound, actualFound)
 			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
@@ -478,6 +478,63 @@ func TestCreateFindVariableRepetitionMax(t *testing.T) {
 		t.Run(testCase.testName, func(t *testing.T) {
 			findVariableRepetitionMax := CreateFindVariableRepetitionMax(testCase.max, testCase.finder)
 			actualFound, actualEnd := findVariableRepetitionMax(testCase.data)
+			equals(testCase.testName, t, testCase.expectedFound, actualFound)
+			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
+		})
+	}
+}
+
+func TestCreateFindVariableRepetition(t *testing.T) {
+	type TestCase struct {
+		testName      string
+		data          []byte
+		finder        FindFunc
+		expectedFound bool
+		expectedEnd   int
+	}
+
+	tests := []TestCase{
+		{
+			testName:      "finder: FindAlpha, data: []byte{}",
+			data:          []byte{},
+			finder:        FindAlpha,
+			expectedFound: true,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "finder: FindAlpha, data: []byte{'a'}",
+			data:          []byte{'a'},
+			finder:        FindAlpha,
+			expectedFound: true,
+			expectedEnd:   1,
+		},
+		{
+			testName:      "finder: FindAlpha, data: []byte{'a'}",
+			data:          []byte{'a'},
+			finder:        FindAlpha,
+			expectedFound: true,
+			expectedEnd:   1,
+		},
+		{
+			testName:      "finder: FindAlpha, data: []byte{'a', 'b'}",
+			data:          []byte{'a', 'b'},
+			finder:        FindAlpha,
+			expectedFound: true,
+			expectedEnd:   2,
+		},
+		{
+			testName:      "finder: FindAlpha, data: []byte{'a', 'b', 'c'}",
+			data:          []byte{'a', 'b', 'c'},
+			finder:        FindAlpha,
+			expectedFound: true,
+			expectedEnd:   3,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			findVariableRepetition := CreateFindVariableRepetition(testCase.finder)
+			actualFound, actualEnd := findVariableRepetition(testCase.data)
 			equals(testCase.testName, t, testCase.expectedFound, actualFound)
 			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
 		})
