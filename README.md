@@ -11,17 +11,17 @@ type FindFunc func(data []byte) (found bool, end int)
 ```
 
 `FindFunc` find the specific ABNF syntax from `data`.  
-If `FindFunc` find the syntax, return `true` as `found` and the end of the syntax as `end`.
+If `FindFunc` find the syntax, return `true` as `found` and the end of syntax as `end`.
 
 ### Example
 
-For exmaple, this library provides `FindAlpha` function.
+For example, this library provides `FindAlpha` function.
 
 ```go
 func FindAlpha(data []byte) (found bool, end int)
 ```
 
-This function find [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
+This function finds [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
 When you call `FindAlpha` with data `[]byte{ 'a', 'b', 'c', }`,  
 `FindAlpha` function search [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from the start of `data`, and it find `'a'`.  
 So it returns `true` as `found` and `0` as `end`.
