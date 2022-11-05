@@ -24,7 +24,7 @@ func FindAlpha(data []byte) (found bool, end int)
 This function finds [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
 When you call `FindAlpha` with data `[]byte{ 'a', 'b', 'c', }`,  
 `FindAlpha` function search [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from the start of `data`, and it find `'a'`.  
-So it returns `true` as `found` and `0` as `end`.
+So it returns `true` as `found` and `1` as `end`.
 
 ```go
 package main
@@ -37,8 +37,8 @@ import (
 
 func main() {
 	var data []byte = []byte{'a', 'b', 'c'}
-	found, end := FindAlpha(data)
-	fmt.Printf("found: %v, end: %v\n", found, end) // -> true, 0
+	found, end := abnfp.FindAlpha(data)
+	fmt.Printf("found: %v, end: %v\n", found, end) // -> true, 1
 }
 ```
 
@@ -57,7 +57,7 @@ import (
 
 func main() {
 	var data []byte = []byte{'0', 'a'}
-	found, end := FindAlpha(data)
+	found, end := abnfp.FindAlpha(data)
 	fmt.Printf("found: %v, end: %v\n", found, end) // -> false, 0
 }
 ```
