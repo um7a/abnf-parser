@@ -76,13 +76,18 @@ func CreateFindValueRangeAlternatives(rangeStart byte, rangeEnd byte) FindFunc {
 		if len(data) == 0 {
 			return
 		}
-		for _, b := range data {
-			if b >= rangeStart && b <= rangeEnd {
-				found = true
-				end = 1
-				break
-			}
+		if data[0] >= rangeStart && data[0] <= rangeEnd {
+			found = true
+			end = 1
+			return
 		}
+		//for _, b := range data {
+		//	if b >= rangeStart && b <= rangeEnd {
+		//		found = true
+		//		end = 1
+		//		break
+		//	}
+		//}
 		return
 	}
 	return findValueRangeAlternatives
