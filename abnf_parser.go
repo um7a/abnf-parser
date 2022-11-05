@@ -233,3 +233,39 @@ func FindHexDig(data []byte) (found bool, end int) {
 	}
 	return
 }
+
+func createFindByte(target byte) FindFunc {
+	findByte := func(data []byte) (found bool, end int) {
+		if len(data) > 0 && data[0] == target {
+			return true, 1
+		}
+		return false, 0
+	}
+	return findByte
+}
+
+func CreateFind(target []byte) FindFunc {
+	find := func(data []byte) (found bool, end int) {
+		for i, t := range target {
+			findByte := createFindByte(t)
+			if i == 0 {
+				found, end = findByte(data)
+			} else {
+				found, end = findByte(data[end:])
+			}
+			if !found {
+				found = false
+				end = 0
+				return
+			}
+			if i < len(target)-1 && i == len(data)-1 {
+				found = false
+				end = 0
+				return
+			}
+		}
+		end = len(target)
+		return
+	}
+	return find
+}

@@ -863,3 +863,67 @@ func TestFindHexDig(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateFind(t *testing.T) {
+	type TestCase struct {
+		testName      string
+		data          []byte
+		target        []byte
+		expectedFound bool
+		expectedEnd   int
+	}
+
+	tests := []TestCase{
+		{
+			testName:      "data: []byte{}, target: []byte{'b', 'c'}",
+			data:          []byte{},
+			target:        []byte{'b', 'c'},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte{'a', 'b'}, target: []byte{'b', 'c'}",
+			data:          []byte{'a', 'b'},
+			target:        []byte{'b', 'c'},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte{'b', 'c'}, target: []byte{'b', 'c'}",
+			data:          []byte{'b', 'c'},
+			target:        []byte{'b', 'c'},
+			expectedFound: true,
+			expectedEnd:   2,
+		},
+		{
+			testName:      "data: []byte{'c', 'd'}, target: []byte{'b', 'c'}",
+			data:          []byte{'c', 'd'},
+			target:        []byte{'b', 'c'},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte{'a', 'b', 'c'}, target: []byte{'b', 'c'}",
+			data:          []byte{'a', 'b', 'c'},
+			target:        []byte{'b', 'c'},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte{'b', 'c', 'd'}, target: []byte{'b', 'c'}",
+			data:          []byte{'b', 'c', 'd'},
+			target:        []byte{'b', 'c'},
+			expectedFound: true,
+			expectedEnd:   2,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			find := CreateFind(testCase.target)
+			actualFound, actualEnd := find(testCase.data)
+			equals(testCase.testName, t, testCase.expectedFound, actualFound)
+			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
+		})
+	}
+}
