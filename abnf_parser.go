@@ -2,6 +2,17 @@ package abnfp
 
 type FindFunc func(data []byte) (found bool, end int)
 
+func Parse(data []byte, finder FindFunc) (found bool, parsed []byte, remaining []byte) {
+	end := 0
+	found, end = finder(data)
+	if !found {
+		return
+	}
+	parsed = data[:end]
+	remaining = data[end:]
+	return
+}
+
 // RFC5234 - 3.1. Concatenation: Rule1 Rule2
 // A rule can define a simple, ordered string of values (i.e., a
 // concatenation of contiguous characters) by listing a sequence of rule
@@ -121,7 +132,10 @@ func CreateFindVariableRepetitionMinMax(min int, max int, finder FindFunc) FindF
 				break
 			}
 			matchCount++
-			if max >= 0 && matchCount >= max || end >= len(data) {
+			if max >= 0 && matchCount >= max {
+				break
+			}
+			if end >= len(data) {
 				break
 			}
 		}

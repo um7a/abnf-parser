@@ -8,6 +8,64 @@ func equals[C comparable](testName string, t *testing.T, expected C, actual C) {
 	}
 }
 
+func TestParse(t *testing.T) {
+	bytesEqual := func(testName string, t *testing.T, expected []byte, actual []byte) {
+		if len(expected) != len(actual) {
+			t.Errorf("%v: expected: %v, actual: %v", testName, expected, actual)
+		}
+		for i, e := range expected {
+			if e != actual[i] {
+				t.Errorf("%v: expected: %v, actual: %v", testName, expected[i], actual[i])
+			}
+		}
+	}
+
+	type TestCase struct {
+		testName          string
+		data              []byte
+		finder            FindFunc
+		expectedFound     bool
+		expectedParsed    []byte
+		expectedRemaining []byte
+	}
+
+	tests := []TestCase{
+		{
+			testName:          "Finder: ALPHA, data: []byte{}",
+			data:              []byte{},
+			finder:            FindAlpha,
+			expectedFound:     false,
+			expectedParsed:    []byte{},
+			expectedRemaining: []byte{},
+		},
+		{
+			testName:          "Finder: ALPHA, data: []byte(\"a\")",
+			data:              []byte("a"),
+			finder:            FindAlpha,
+			expectedFound:     true,
+			expectedParsed:    []byte("a"),
+			expectedRemaining: []byte{},
+		},
+		{
+			testName:          "Finder: ALPHA, data: []byte(\"abc\")",
+			data:              []byte("abc"),
+			finder:            FindAlpha,
+			expectedFound:     true,
+			expectedParsed:    []byte("a"),
+			expectedRemaining: []byte("bc"),
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			actualFound, actualParsed, actualRemaining := Parse(testCase.data, testCase.finder)
+			equals(testCase.testName, t, testCase.expectedFound, actualFound)
+			bytesEqual(testCase.testName, t, testCase.expectedParsed, actualParsed)
+			bytesEqual(testCase.testName, t, testCase.expectedRemaining, actualRemaining)
+		})
+	}
+}
+
 func TestCreateFindConcatenation(t *testing.T) {
 	type TestCase struct {
 		testName      string
