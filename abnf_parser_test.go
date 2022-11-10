@@ -66,6 +66,49 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestFindCrLf(t *testing.T) {
+	type TestCase struct {
+		testName      string
+		data          []byte
+		expectedFound bool
+		expectedEnd   int
+	}
+	tests := []TestCase{
+		{
+			testName:      "data: []byte{}",
+			data:          []byte{},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte(\"a\")",
+			data:          []byte("a"),
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte(\"\\r\")",
+			data:          []byte("\r"),
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte(\"\\r\\n\")",
+			data:          []byte("\r\n"),
+			expectedFound: true,
+			expectedEnd:   2,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			actualFound, actualEnd := FindCrLf(testCase.data)
+			equals(testCase.testName, t, testCase.expectedFound, actualFound)
+			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
+		})
+	}
+}
+
 func TestCreateFindConcatenation(t *testing.T) {
 	type TestCase struct {
 		testName      string
@@ -973,6 +1016,182 @@ func TestFindHexDig(t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.testName, func(t *testing.T) {
 			actualFound, actualEnd := FindHexDig(testCase.data)
+			equals(testCase.testName, t, testCase.expectedFound, actualFound)
+			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
+		})
+	}
+}
+
+func TestFindHTab(t *testing.T) {
+	type TestCase struct {
+		testName      string
+		data          []byte
+		expectedFound bool
+		expectedEnd   int
+	}
+
+	tests := []TestCase{
+		{
+			testName:      "data: []byte{}",
+			data:          []byte{},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte(\"a\")",
+			data:          []byte("a"),
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte{0x20}",
+			data:          []byte{0x20},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte{0x09}",
+			data:          []byte{0x09},
+			expectedFound: true,
+			expectedEnd:   1,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			actualFound, actualEnd := FindHTab(testCase.data)
+			equals(testCase.testName, t, testCase.expectedFound, actualFound)
+			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
+		})
+	}
+}
+
+func TestFindOctet(t *testing.T) {
+	type TestCase struct {
+		testName      string
+		data          []byte
+		expectedFound bool
+		expectedEnd   int
+	}
+
+	tests := []TestCase{
+		{
+			testName:      "data: []byte{}",
+			data:          []byte{},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte{0x00}",
+			data:          []byte{0x00},
+			expectedFound: true,
+			expectedEnd:   1,
+		},
+		{
+			testName:      "data: []byte{0xff}",
+			data:          []byte{0xff},
+			expectedFound: true,
+			expectedEnd:   1,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			actualFound, actualEnd := FindOctet(testCase.data)
+			equals(testCase.testName, t, testCase.expectedFound, actualFound)
+			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
+		})
+	}
+}
+
+func TestFindSp(t *testing.T) {
+	type TestCase struct {
+		testName      string
+		data          []byte
+		expectedFound bool
+		expectedEnd   int
+	}
+
+	tests := []TestCase{
+		{
+			testName:      "data: []byte{}",
+			data:          []byte{},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte(\"a\")",
+			data:          []byte("a"),
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte{0x20}",
+			data:          []byte{0x20},
+			expectedFound: true,
+			expectedEnd:   1,
+		},
+		{
+			testName:      "data: []byte{0x09}",
+			data:          []byte{0x09},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			actualFound, actualEnd := FindSp(testCase.data)
+			equals(testCase.testName, t, testCase.expectedFound, actualFound)
+			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
+		})
+	}
+}
+
+func TestFindVChar(t *testing.T) {
+	type TestCase struct {
+		testName      string
+		data          []byte
+		expectedFound bool
+		expectedEnd   int
+	}
+
+	tests := []TestCase{
+		{
+			testName:      "data: []byte{}",
+			data:          []byte{},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte{0x20}",
+			data:          []byte{0x20},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte{0x21}",
+			data:          []byte{0x21},
+			expectedFound: true,
+			expectedEnd:   1,
+		},
+		{
+			testName:      "data: []byte{0x7e}",
+			data:          []byte{0x7e},
+			expectedFound: true,
+			expectedEnd:   1,
+		},
+		{
+			testName:      "data: []byte{0x7f}",
+			data:          []byte{0x7f},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			actualFound, actualEnd := FindVChar(testCase.data)
 			equals(testCase.testName, t, testCase.expectedFound, actualFound)
 			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
 		})

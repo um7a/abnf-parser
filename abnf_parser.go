@@ -13,6 +13,19 @@ func Parse(data []byte, finder FindFunc) (found bool, parsed []byte, remaining [
 	return
 }
 
+// RFC5234 - 2.3. Terminal Values
+// A concatenated string of such values is specified compactly, using a
+// period (".") to indicate a separation of characters within that
+// value.  Hence:
+//
+//  CRLF =  %d13.10
+//
+
+func FindCrLf(data []byte) (found bool, end int) {
+	findCrLf := CreateFind([]byte("\r\n"))
+	return findCrLf(data)
+}
+
 // RFC5234 - 3.1. Concatenation: Rule1 Rule2
 // A rule can define a simple, ordered string of values (i.e., a
 // concatenation of contiguous characters) by listing a sequence of rule
@@ -92,13 +105,6 @@ func CreateFindValueRangeAlternatives(rangeStart byte, rangeEnd byte) FindFunc {
 			end = 1
 			return
 		}
-		//for _, b := range data {
-		//	if b >= rangeStart && b <= rangeEnd {
-		//		found = true
-		//		end = 1
-		//		break
-		//	}
-		//}
 		return
 	}
 	return findValueRangeAlternatives
@@ -204,19 +210,12 @@ func CreateFindOptionalSequence(finder FindFunc) FindFunc {
 //  ALPHA = %x41-5A / %x61-7A ; A-Z / a-z
 //
 
-func isAlpha(b byte) bool {
-	return b >= byte('A') && b <= byte('Z') || b >= byte('a') && b <= byte('z')
-}
-
 func FindAlpha(data []byte) (found bool, end int) {
-	if len(data) <= 0 {
-		return
-	}
-	if isAlpha(data[0]) {
-		found = true
-		end = 1
-	}
-	return
+	findAlpha := CreateFindAlternatives([]FindFunc{
+		CreateFindValueRangeAlternatives(0x41, 0x5a),
+		CreateFindValueRangeAlternatives(0x61, 0x7a),
+	})
+	return findAlpha(data)
 }
 
 // RFC5234 - B.1. Core Rules
@@ -224,15 +223,37 @@ func FindAlpha(data []byte) (found bool, end int) {
 //  DIGIT = %x30-39 ; 0-9
 //
 
-func isDigit(b byte) bool {
-	return b >= 0x30 && b <= 0x39
+func FindDigit(data []byte) (found bool, end int) {
+	findDigit := CreateFindValueRangeAlternatives(0x30, 0x39)
+	return findDigit(data)
 }
 
-func FindDigit(data []byte) (found bool, end int) {
-	if len(data) <= 0 {
-		return
-	}
-	if isDigit(data[0]) {
+// RFC5234 - B.1. Core Rules
+//
+//  HEXDIG = DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
+//
+
+func FindHexDig(data []byte) (found bool, end int) {
+	findHexDig := CreateFindAlternatives([]FindFunc{
+		FindDigit,
+		createFindByte('A'),
+		createFindByte('B'),
+		createFindByte('C'),
+		createFindByte('D'),
+		createFindByte('E'),
+		createFindByte('F'),
+	})
+	return findHexDig(data)
+}
+
+// RFC5234 - B.1. Core Rules
+//
+//  HTAB = %x09
+//  ; horizontal tab
+//
+
+func FindHTab(data []byte) (found bool, end int) {
+	if len(data) > 0 && data[0] == 0x09 {
 		found = true
 		end = 1
 	}
@@ -241,18 +262,39 @@ func FindDigit(data []byte) (found bool, end int) {
 
 // RFC5234 - B.1. Core Rules
 //
-//  HEXDIG = DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
+//  OCTET = %x00-FF
+//  ; 8 bits of data
 //
 
-func isHexDig(b byte) bool {
-	return isDigit(b) || b >= byte('A') && b <= byte('F')
+func FindOctet(data []byte) (found bool, end int) {
+	if len(data) > 0 && data[0] >= 0x00 && data[0] <= 0xff {
+		found = true
+		end = 1
+	}
+	return
 }
 
-func FindHexDig(data []byte) (found bool, end int) {
-	if len(data) <= 0 {
-		return
+// RFC5234 - B.1. Core Rules
+//
+//  SP =  %x20
+//
+
+func FindSp(data []byte) (found bool, end int) {
+	if len(data) > 0 && data[0] == 0x20 {
+		found = true
+		end = 1
 	}
-	if isHexDig(data[0]) {
+	return
+}
+
+// RFC5234 - B.1. Core Rules
+//
+//  VCHAR = %x21-7E
+//  ; visible (printing) characters
+//
+
+func FindVChar(data []byte) (found bool, end int) {
+	if len(data) > 0 && data[0] >= 0x21 && data[0] <= 0x7e {
 		found = true
 		end = 1
 	}
