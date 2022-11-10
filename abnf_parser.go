@@ -230,6 +230,20 @@ func FindDigit(data []byte) (found bool, end int) {
 
 // RFC5234 - B.1. Core Rules
 //
+//  DQUOTE = %x22
+//  ; " (Double Quote)
+//
+
+func FindDQuote(data []byte) (found bool, end int) {
+	if len(data) > 0 && data[0] == 0x22 {
+		found = true
+		end = 1
+	}
+	return
+}
+
+// RFC5234 - B.1. Core Rules
+//
 //  HEXDIG = DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
 //
 

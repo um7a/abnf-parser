@@ -936,6 +936,50 @@ func TestFindDigit(t *testing.T) {
 	}
 }
 
+func TestFindDQuote(t *testing.T) {
+	type TestCase struct {
+		testName      string
+		data          []byte
+		expectedFound bool
+		expectedEnd   int
+	}
+
+	tests := []TestCase{
+		{
+			testName:      "data: []byte{}",
+			data:          []byte{},
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte(\"a\")",
+			data:          []byte("a"),
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte(\"'\")",
+			data:          []byte("'"),
+			expectedFound: false,
+			expectedEnd:   0,
+		},
+		{
+			testName:      "data: []byte(\"\"\")",
+			data:          []byte("\""),
+			expectedFound: true,
+			expectedEnd:   1,
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			actualFound, actualEnd := FindDQuote(testCase.data)
+			equals(testCase.testName, t, testCase.expectedFound, actualFound)
+			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
+		})
+	}
+}
+
 func TestFindHexDig(t *testing.T) {
 	type TestCase struct {
 		testName      string
