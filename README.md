@@ -4,27 +4,28 @@ Go library for Parsing the syntax defined in [ABNF](https://datatracker.ietf.org
 
 ## 1. Concept
 
-### 1.1. FindFunc
+### 1.1. Finder
 
-This library provides the functions whose type are `FindFunc`.
-
-```go
-type FindFunc func(data []byte) (found bool, end int)
-```
-
-`FindFunc` finds the specific ABNF syntax such as [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), [DIGIT](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), [Concatenation](https://datatracker.ietf.org/doc/html/rfc5234#section-3.1), [Alternatives](https://datatracker.ietf.org/doc/html/rfc5234#section-3.2), etc. from `data`.  
-If `FindFunc` find the syntax, it return `true` as `found` and the end of syntax as `end`.
-
-### Example
-
-For example, this library provides `FindAlpha` function.
+This library provides Finders.  
+Finder is the struct which has the methods named `find` and `copy`.
 
 ```go
-func FindAlpha(data []byte) (found bool, end int)
+type Finder interface {
+	find(data []byte) []int
+	copy() Finder
+}
 ```
 
-This function finds [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
-When you call `FindAlpha` with data `[]byte{ 'a', 'b', 'c', }`, it search [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from the beginning of `data`. Then it returns `true` as `found` and `1` as `end` because `data` has `'a'` at the beginning.
+#### 1.1.1. Finder.find
+
+`Finder.find(data)` method finds the specific ABNF syntax such as [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), [DIGIT](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), [Concatenation](https://datatracker.ietf.org/doc/html/rfc5234#section-3.1), [Alternatives](https://datatracker.ietf.org/doc/html/rfc5234#section-3.2), etc. from `data`.  
+If it find the syntax, it return `[]int` which has the ends of the syntax.
+
+##### Example
+
+For example, this library provides `AlphaFinder`.  
+This Finder finds [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
+When you call it's `find` method with data `[]byte{ 'a', 'b', 'c', }`, it search [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from the beginning of `data`. Then it returns `[]int{1}` because `data` has `'a'` at the beginning.
 
 ```go
 package main
@@ -37,13 +38,14 @@ import (
 
 func main() {
 	var data []byte = []byte{'a', 'b', 'c'}
-	found, end := abnfp.FindAlpha(data)
-	fmt.Printf("found: %v, end: %v\n", found, end) // -> true, 1
+	alpha := abnfp.NewAlphaFinder()
+	ends := alpha.find(data)
+	fmt.Printf("%v\n", ends) // -> {1}
 }
 ```
 
-Note that `FindFunc` only finds the syntax at the beginning.  
-This means that when you call `FindAlpha` with data `[]byte{ '0', 'a' }`, it doesn't find `'a'` and returns `false` because there is `'0'` at the beginning of `data` and it is not [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1).
+Note that `find` method only finds the syntax at the beginning.  
+This means that when you call `Alpha.find` method with data `[]byte{ '0', 'a' }`, it doesn't find `'a'` and returns `false` because there is `'0'` at the beginning of `data` and it is not [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1).
 
 ```go
 package main
@@ -56,27 +58,62 @@ import (
 
 func main() {
 	var data []byte = []byte{'0', 'a'}
-	found, end := abnfp.FindAlpha(data)
-	fmt.Printf("found: %v, end: %v\n", found, end) // -> false, 0
+	alpha := abnfp.NewAlphaFinder()
+	ends := alpha.find(data)
+	fmt.Printf("%v\n", ends) // -> {}
+}
+```
+
+#### 1.1.2. Finder.copy
+
+`Finder.copy` method returns the copy of the Finder.  
+Some of Finders has other finders as it's child. it also copies them. Note that this copy is the deep copy.
+
+##### Example
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/um7a/abnf-parser"
+)
+
+func main() {
+	alpha1 := abnfp.NewAlphaFinder()
+	alpha2 := alpha1.copy()
+
+	var data []byte = []byte{'a', 'b', 'c'}
+	ends := alpha2.find(data)
+	fmt.Printf("%v\n", ends) // -> {1}
 }
 ```
 
 ### 1.2. Parse
 
-The only utility provided by this library other than `FindFunc` is `Parse` function.
+The only utility provided by this library other than `Finder` is `Parse` function.
 
 ```go
-func Parse(data []byte, finder FindFunc) (found bool, parsed []byte, remaining []byte)
+func Parse(data []byte, finder Finder) (results []ParseResult)
 ```
 
-This function parses the syntax specified by `finder FindFunc` from `data []byte`.  
-If this function find the syntax, return `true` as `found`, the parsed data as `parsed` and the remaining data as `remaining`.
+`Parse` function returns `[]ParseResult`. It's element `ParseResult` is the type like the following.
 
-### Example
+```go
+type ParseResult struct {
+	parsed    []byte
+	remaining []byte
+}
+```
 
-For example, when `data` is `[]byte{'a', 'b', 'c'}` and `finder` is `FindAlpha`,  
-`Parse` function parse [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
-Because `'a'` is [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), it returns `true` as `found`, `[]byte{'a'}` as `parsed`, `[]byte{'b', 'c'}` as `remaining`.
+This function parses the syntax specified by `finder` from `data []byte`.  
+If it find the syntax, return `ParseResult` whose `parsed` is the parsed data and `remaining` is the remaining data.
+
+#### Example
+
+For example, when `data` is `[]byte{'a', 'b', 'c'}` and `finder` is `AlphaFinder`,  
+`Parse` function parses [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data` and returns `{{parsed: {'a'}, remaining: {'b', 'c'}}}`
 
 ```go
 package main
@@ -89,8 +126,8 @@ import (
 
 func main() {
 	var data []byte = []byte{'a', 'b', 'c'}
-	found, parsed, remaining := Parse(data, abnfp.FindAlpha)
-	fmt.Printf("found: %v, parsed: %s, remaining: %s\n", found, parsed, remaining)
-	// -> true, a, bc
+	result := Parse(data, abnfp.FindAlpha)
+	fmt.Printf("parsed: %s, remaining: %s\n", result.parsed, result.remaining)
+	// -> {'a'}, {'b', 'c'}
 }
 ```
