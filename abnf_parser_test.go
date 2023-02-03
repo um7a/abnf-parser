@@ -29,7 +29,7 @@ func equals[C comparable](testName string, t *testing.T, expected C, actual C) {
 func execTest(tests []TestCase, t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.testName, func(t *testing.T) {
-			actualEnds := testCase.finder.find(testCase.data)
+			actualEnds := testCase.finder.Find(testCase.data)
 			sliceEquals(testCase.testName, t, testCase.expectedEnds, actualEnds)
 		})
 	}
@@ -55,7 +55,7 @@ func TestParse(t *testing.T) {
 			data:     []byte("a"),
 			finder:   NewByteFinder('a'),
 			expectedParseResults: []ParseResult{
-				{parsed: []byte("a"), remaining: []byte{}},
+				{Parsed: []byte("a"), Remaining: []byte{}},
 			},
 		},
 		{
@@ -63,7 +63,7 @@ func TestParse(t *testing.T) {
 			data:     []byte("abc"),
 			finder:   NewByteFinder('a'),
 			expectedParseResults: []ParseResult{
-				{parsed: []byte("a"), remaining: []byte("bc")},
+				{Parsed: []byte("a"), Remaining: []byte("bc")},
 			},
 		},
 		{
@@ -74,8 +74,8 @@ func TestParse(t *testing.T) {
 				NewByteFinder('a'),
 			}),
 			expectedParseResults: []ParseResult{
-				{parsed: []byte("a"), remaining: []byte("a")},
-				{parsed: []byte("aa"), remaining: []byte{}},
+				{Parsed: []byte("a"), Remaining: []byte("a")},
+				{Parsed: []byte("aa"), Remaining: []byte{}},
 			},
 		},
 	}
@@ -94,14 +94,14 @@ func TestParse(t *testing.T) {
 				sliceEquals(
 					testCase.testName,
 					t,
-					expectedParseResult.parsed,
-					actualParseResults[i].parsed,
+					expectedParseResult.Parsed,
+					actualParseResults[i].Parsed,
 				)
 				sliceEquals(
 					testCase.testName,
 					t,
-					expectedParseResult.remaining,
-					actualParseResults[i].remaining,
+					expectedParseResult.Remaining,
+					actualParseResults[i].Remaining,
 				)
 			}
 		})

@@ -1,26 +1,26 @@
 package abnfp
 
 type ParseResult struct {
-	parsed    []byte
-	remaining []byte
+	Parsed    []byte
+	Remaining []byte
 }
 
 func Parse(data []byte, finder Finder) (results []ParseResult) {
-	ends := finder.find(data)
+	ends := finder.Find(data)
 	if len(ends) == 0 {
 		return
 	}
 	for _, end := range ends {
 		parsed := data[:end]
 		remaining := data[end:]
-		results = append(results, ParseResult{parsed: parsed, remaining: remaining})
+		results = append(results, ParseResult{Parsed: parsed, Remaining: remaining})
 	}
 	return
 }
 
 type Finder interface {
-	find(data []byte) []int
-	copy() Finder
+	Find(data []byte) []int
+	Copy() Finder
 }
 
 type ByteFinder struct {
@@ -31,14 +31,14 @@ func NewByteFinder(target byte) *ByteFinder {
 	return &ByteFinder{target: target}
 }
 
-func (finder ByteFinder) find(data []byte) (ends []int) {
+func (finder ByteFinder) Find(data []byte) (ends []int) {
 	if len(data) > 0 && data[0] == finder.target {
 		ends = []int{1}
 	}
 	return
 }
 
-func (finder ByteFinder) copy() Finder {
+func (finder ByteFinder) Copy() Finder {
 	return NewByteFinder(finder.target)
 }
 
@@ -52,7 +52,7 @@ func NewBytesFinder(target []byte) *BytesFinder {
 	return &BytesFinder{target: targetCopy}
 }
 
-func (finder BytesFinder) find(data []byte) (ends []int) {
+func (finder BytesFinder) Find(data []byte) (ends []int) {
 	if len(finder.target) > len(data) {
 		return []int{}
 	}
@@ -61,9 +61,9 @@ func (finder BytesFinder) find(data []byte) (ends []int) {
 	for i, t := range finder.target {
 		byteFinder := ByteFinder{target: t}
 		if i == 0 {
-			tmpEnds = byteFinder.find(data)
+			tmpEnds = byteFinder.Find(data)
 		} else {
-			tmpEnds = byteFinder.find(data[i:])
+			tmpEnds = byteFinder.Find(data[i:])
 		}
 		if len(tmpEnds) == 0 {
 			return
@@ -73,7 +73,7 @@ func (finder BytesFinder) find(data []byte) (ends []int) {
 	return
 }
 
-func (finder BytesFinder) copy() Finder {
+func (finder BytesFinder) Copy() Finder {
 	return NewBytesFinder(finder.target)
 }
 
@@ -92,12 +92,12 @@ func NewCrLfFinder() *CrLfFinder {
 	return &CrLfFinder{}
 }
 
-func (finder CrLfFinder) find(data []byte) (ends []int) {
+func (finder CrLfFinder) Find(data []byte) (ends []int) {
 	bytesFinder := BytesFinder{target: []byte("\r\n")}
-	return bytesFinder.find(data)
+	return bytesFinder.Find(data)
 }
 
-func (finder CrLfFinder) copy() Finder {
+func (finder CrLfFinder) Copy() Finder {
 	return NewCrLfFinder()
 }
 
@@ -120,7 +120,7 @@ func NewConcatenationFinder(finders []Finder) *ConcatenationFinder {
 	var findersCopy []Finder
 
 	for _, finder := range finders {
-		findersCopy = append(findersCopy, finder.copy())
+		findersCopy = append(findersCopy, finder.Copy())
 	}
 
 	return &ConcatenationFinder{childFinders: findersCopy}
@@ -137,10 +137,10 @@ func sliceUnique(src []int) (unique []int) {
 	return unique
 }
 
-func (finder ConcatenationFinder) find(data []byte) (ends []int) {
+func (finder ConcatenationFinder) Find(data []byte) (ends []int) {
 	for childCount, childFinder := range finder.childFinders {
 		if childCount == 0 {
-			ends = childFinder.find(data)
+			ends = childFinder.Find(data)
 		} else {
 			pastEnds := ends
 			ends = []int{}
@@ -152,7 +152,7 @@ func (finder ConcatenationFinder) find(data []byte) (ends []int) {
 				} else {
 					remaining = data[pastEnd:]
 				}
-				partialEnds = childFinder.find(remaining)
+				partialEnds = childFinder.Find(remaining)
 				for i := 0; i < len(partialEnds); i++ {
 					partialEnds[i] += pastEnd
 				}
@@ -169,7 +169,7 @@ func (finder ConcatenationFinder) find(data []byte) (ends []int) {
 	return
 }
 
-func (finder ConcatenationFinder) copy() Finder {
+func (finder ConcatenationFinder) Copy() Finder {
 	return NewConcatenationFinder(finder.childFinders)
 }
 
@@ -189,16 +189,16 @@ func NewAlternativesFinder(finders []Finder) *AlternativesFinder {
 	var findersCopy []Finder
 
 	for _, finder := range finders {
-		findersCopy = append(findersCopy, finder.copy())
+		findersCopy = append(findersCopy, finder.Copy())
 	}
 
 	return &AlternativesFinder{childFinders: findersCopy}
 }
 
-func (finder AlternativesFinder) find(data []byte) (ends []int) {
+func (finder AlternativesFinder) Find(data []byte) (ends []int) {
 	var tmpEnds []int
 	for _, child := range finder.childFinders {
-		tmpEnds = child.find(data)
+		tmpEnds = child.Find(data)
 		if len(tmpEnds) != 0 {
 			ends = append(ends, tmpEnds...)
 		}
@@ -206,7 +206,7 @@ func (finder AlternativesFinder) find(data []byte) (ends []int) {
 	return
 }
 
-func (finder AlternativesFinder) copy() Finder {
+func (finder AlternativesFinder) Copy() Finder {
 	return NewAlternativesFinder(finder.childFinders)
 }
 
@@ -231,7 +231,7 @@ func NewValueRangeAlternativesFinder(rangeStart byte, rangeEnd byte) *ValueRange
 	return &ValueRangeAlternativesFinder{rangeStart: rangeStart, rangeEnd: rangeEnd}
 }
 
-func (finder ValueRangeAlternativesFinder) find(data []byte) (ends []int) {
+func (finder ValueRangeAlternativesFinder) Find(data []byte) (ends []int) {
 	if len(data) == 0 {
 		return
 	}
@@ -241,7 +241,7 @@ func (finder ValueRangeAlternativesFinder) find(data []byte) (ends []int) {
 	return
 }
 
-func (finder ValueRangeAlternativesFinder) copy() Finder {
+func (finder ValueRangeAlternativesFinder) Copy() Finder {
 	return NewValueRangeAlternativesFinder(finder.rangeStart, finder.rangeEnd)
 }
 
@@ -265,7 +265,7 @@ type VariableRepetitionFinder struct {
 }
 
 func NewVariableRepetitionMinMaxFinder(min int, max int, finder Finder) *VariableRepetitionFinder {
-	finderCopy := finder.copy()
+	finderCopy := finder.Copy()
 	return &VariableRepetitionFinder{min: min, max: max, childFinder: finderCopy}
 }
 
@@ -281,7 +281,7 @@ func NewVariableRepetitionFinder(finder Finder) *VariableRepetitionFinder {
 	return NewVariableRepetitionMinMaxFinder(0, -1, finder)
 }
 
-func (finder *VariableRepetitionFinder) find(data []byte) (ends []int) {
+func (finder *VariableRepetitionFinder) Find(data []byte) (ends []int) {
 	if finder.min == 0 {
 		ends = []int{0}
 	}
@@ -291,10 +291,10 @@ func (finder *VariableRepetitionFinder) find(data []byte) (ends []int) {
 	var pastEnd int
 	for {
 		if matchCount == 0 {
-			tmpEnds = finder.childFinder.find(data)
+			tmpEnds = finder.childFinder.Find(data)
 		} else {
 			pastEnd = tmpEnds[0]
-			tmpEnds = finder.childFinder.find(data[pastEnd:])
+			tmpEnds = finder.childFinder.Find(data[pastEnd:])
 		}
 		if len(tmpEnds) == 0 {
 			break
@@ -314,7 +314,7 @@ func (finder *VariableRepetitionFinder) find(data []byte) (ends []int) {
 	return
 }
 
-func (finder VariableRepetitionFinder) copy() Finder {
+func (finder VariableRepetitionFinder) Copy() Finder {
 	return NewVariableRepetitionMinMaxFinder(finder.min, finder.max, finder.childFinder)
 }
 
@@ -334,18 +334,18 @@ type SpecificRepetitionFinder struct {
 }
 
 func NewSpecificRepetitionFinder(count int, finder Finder) *SpecificRepetitionFinder {
-	finderCopy := finder.copy()
+	finderCopy := finder.Copy()
 	return &SpecificRepetitionFinder{count: count, childFinder: finderCopy}
 }
 
-func (finder SpecificRepetitionFinder) find(data []byte) []int {
+func (finder SpecificRepetitionFinder) Find(data []byte) []int {
 	min := finder.count
 	max := finder.count
 	variableRepetitionFinder := NewVariableRepetitionMinMaxFinder(min, max, finder.childFinder)
-	return variableRepetitionFinder.find(data)
+	return variableRepetitionFinder.Find(data)
 }
 
-func (finder SpecificRepetitionFinder) copy() Finder {
+func (finder SpecificRepetitionFinder) Copy() Finder {
 	return NewSpecificRepetitionFinder(finder.count, finder.childFinder)
 }
 
@@ -364,18 +364,18 @@ type OptionalSequenceFinder struct {
 }
 
 func NewOptionalSequenceFinder(finder Finder) *OptionalSequenceFinder {
-	finderCopy := finder.copy()
+	finderCopy := finder.Copy()
 	return &OptionalSequenceFinder{childFinder: finderCopy}
 }
 
-func (finder *OptionalSequenceFinder) find(data []byte) []int {
+func (finder *OptionalSequenceFinder) Find(data []byte) []int {
 	min := 0
 	max := 1
 	variableRepetitionFinder := NewVariableRepetitionMinMaxFinder(min, max, finder.childFinder)
-	return variableRepetitionFinder.find(data)
+	return variableRepetitionFinder.Find(data)
 }
 
-func (finder OptionalSequenceFinder) copy() Finder {
+func (finder OptionalSequenceFinder) Copy() Finder {
 	return NewOptionalSequenceFinder(finder.childFinder)
 }
 
@@ -391,15 +391,15 @@ func NewAlphaFinder() *AlphaFinder {
 	return &AlphaFinder{}
 }
 
-func (finder AlphaFinder) find(data []byte) []int {
+func (finder AlphaFinder) Find(data []byte) []int {
 	alternativesFinder := NewAlternativesFinder([]Finder{
 		NewValueRangeAlternativesFinder(0x41, 0x5a),
 		NewValueRangeAlternativesFinder(0x61, 0x7a),
 	})
-	return alternativesFinder.find(data)
+	return alternativesFinder.Find(data)
 }
 
-func (finder AlphaFinder) copy() Finder {
+func (finder AlphaFinder) Copy() Finder {
 	return NewAlphaFinder()
 }
 
@@ -415,12 +415,12 @@ func NewDigitFinder() *DigitFinder {
 	return &DigitFinder{}
 }
 
-func (finder DigitFinder) find(data []byte) []int {
+func (finder DigitFinder) Find(data []byte) []int {
 	valueRangeAlternativesFinder := NewValueRangeAlternativesFinder(0x30, 0x39)
-	return valueRangeAlternativesFinder.find(data)
+	return valueRangeAlternativesFinder.Find(data)
 }
 
-func (finder DigitFinder) copy() Finder {
+func (finder DigitFinder) Copy() Finder {
 	return NewDigitFinder()
 }
 
@@ -437,12 +437,12 @@ func NewDQuoteFinder() *DQuoteFinder {
 	return &DQuoteFinder{}
 }
 
-func (finder DQuoteFinder) find(data []byte) []int {
+func (finder DQuoteFinder) Find(data []byte) []int {
 	byteFinder := NewByteFinder(0x22)
-	return byteFinder.find(data)
+	return byteFinder.Find(data)
 }
 
-func (finder DQuoteFinder) copy() Finder {
+func (finder DQuoteFinder) Copy() Finder {
 	return NewDQuoteFinder()
 }
 
@@ -458,7 +458,7 @@ func NewHexDigFinder() *HexDigFinder {
 	return &HexDigFinder{}
 }
 
-func (finder HexDigFinder) find(data []byte) []int {
+func (finder HexDigFinder) Find(data []byte) []int {
 	alternativesFinder := NewAlternativesFinder([]Finder{
 		NewDigitFinder(),
 		NewByteFinder('A'),
@@ -468,10 +468,10 @@ func (finder HexDigFinder) find(data []byte) []int {
 		NewByteFinder('E'),
 		NewByteFinder('F'),
 	})
-	return alternativesFinder.find(data)
+	return alternativesFinder.Find(data)
 }
 
-func (finder HexDigFinder) copy() Finder {
+func (finder HexDigFinder) Copy() Finder {
 	return *NewHexDigFinder()
 }
 
@@ -488,12 +488,12 @@ func NewHTabFinder() *HTabFinder {
 	return &HTabFinder{}
 }
 
-func (finder HTabFinder) find(data []byte) []int {
+func (finder HTabFinder) Find(data []byte) []int {
 	byteFinder := NewByteFinder(0x09)
-	return byteFinder.find(data)
+	return byteFinder.Find(data)
 }
 
-func (finder HTabFinder) copy() Finder {
+func (finder HTabFinder) Copy() Finder {
 	return *NewHTabFinder()
 }
 
@@ -510,12 +510,12 @@ func NewOctetFinder() *OctetFinder {
 	return &OctetFinder{}
 }
 
-func (finder OctetFinder) find(data []byte) []int {
+func (finder OctetFinder) Find(data []byte) []int {
 	valueRangeAlternativesFinder := NewValueRangeAlternativesFinder(0x00, 0xFF)
-	return valueRangeAlternativesFinder.find(data)
+	return valueRangeAlternativesFinder.Find(data)
 }
 
-func (finder OctetFinder) copy() Finder {
+func (finder OctetFinder) Copy() Finder {
 	return *NewOctetFinder()
 }
 
@@ -531,12 +531,12 @@ func NewSpFinder() *SpFinder {
 	return &SpFinder{}
 }
 
-func (finder SpFinder) find(data []byte) []int {
+func (finder SpFinder) Find(data []byte) []int {
 	byteFinder := NewByteFinder(0x20)
-	return byteFinder.find(data)
+	return byteFinder.Find(data)
 }
 
-func (finder SpFinder) copy() Finder {
+func (finder SpFinder) Copy() Finder {
 	return NewSpFinder()
 }
 
@@ -553,11 +553,11 @@ func NewVCharFinder() *VCharFinder {
 	return &VCharFinder{}
 }
 
-func (finder VCharFinder) find(data []byte) []int {
+func (finder VCharFinder) Find(data []byte) []int {
 	valueRangeAlternativesFinder := NewValueRangeAlternativesFinder(0x21, 0x7E)
-	return valueRangeAlternativesFinder.find(data)
+	return valueRangeAlternativesFinder.Find(data)
 }
 
-func (finder VCharFinder) copy() Finder {
+func (finder VCharFinder) Copy() Finder {
 	return *NewVCharFinder()
 }
