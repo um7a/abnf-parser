@@ -99,9 +99,14 @@ import (
 
 func main() {
 	var data []byte = []byte{'a', 'b', 'c'}
-	results := Parse(data, abnfp.FindAlpha, abnfp.PARSE_LONGEST)
-	fmt.Printf("results: %s\n", results)
-	// -> results: [{a bc}]
+	results := abnfp.Parse(data, abnfp.FindAlpha, abnfp.PARSE_LONGEST)
+
+	fmt.Printf("len(results): %v\n", len(results))
+	// -> len(results): 1
+	fmt.Printf("results[0].Parsed: %s\n", results[0].Parsed)
+	// -> results[0].Parsed: a
+	fmt.Printf("results[0].Remaining: %s\n", results[0].Remaining)
+	// -> results[0].Remaining: bc
 }
 ```
 
@@ -135,34 +140,36 @@ import (
 
 func main() {
 	var data []byte = []byte{'a', 'b', 'c'}
-	var results []ParseResult
+	var results []abnfp.ParseResult
 
-	results = Parse(
+	results = abnfp.Parse(
 		data,
 		abnfp.NewFindVariableRepetition(abnfp.FindAlpha),
 		abnfp.PARSE_LONGEST)
-
 	for _, result := range results {
-		fmt.Printf("result.Parsed: %s, result.Remaining\n", result.Parsed, result.Remaining)
+		fmt.Printf("result.Parsed: %s, result.Remaining: %s\n", result.Parsed, result.Remaining)
 	}
+	// -> result.Parsed: abc, result.Remaining:
 
-	results = Parse(
+	results = abnfp.Parse(
 		data,
 		abnfp.NewFindVariableRepetition(abnfp.FindAlpha),
 		abnfp.PARSE_SHORTEST)
-
 	for _, result := range results {
-		fmt.Printf("result.Parsed: %s, result.Remaining\n", result.Parsed, result.Remaining)
+		fmt.Printf("result.Parsed: %s, result.Remaining: %s\n", result.Parsed, result.Remaining)
 	}
+	// -> result.Parsed: , result.Remaining: abc
 
-	results = Parse(
+	results = abnfp.Parse(
 		data,
 		abnfp.NewFindVariableRepetition(abnfp.FindAlpha),
 		abnfp.PARSE_ALL)
-
 	for _, result := range results {
-		fmt.Printf("result.Parsed: %s, result.Remaining\n", result.Parsed, result.Remaining)
+		fmt.Printf("result.Parsed: %s, result.Remaining: %s\n", result.Parsed, result.Remaining)
 	}
+	// -> result.Parsed: , result.Remaining: abc
+	// -> result.Parsed: a, result.Remaining: bc
+	// -> result.Parsed: ab, result.Remaining: c
+	// -> result.Parsed: abc, result.Remaining:
 }
-
 ```
