@@ -1,129 +1,38 @@
 package abnfp
 
+type ParseMode int
+
 type ParseResult struct {
 	Parsed    []byte
 	Remaining []byte
 }
 
-func Parse(data []byte, finder Finder) (results []ParseResult) {
-	ends := finder.Find(data)
-	if len(ends) == 0 {
-		return
-	}
-	for _, end := range ends {
-		parsed := data[:end]
-		remaining := data[end:]
-		results = append(results, ParseResult{Parsed: parsed, Remaining: remaining})
-	}
-	return
-}
+type FindFunc func(data []byte) (ends []int)
 
-type Finder interface {
-	Find(data []byte) []int
-	Copy() Finder
-}
+var PARSE_LONGEST ParseMode = 0
+var PARSE_SHORTEST ParseMode = 1
+var PARSE_ALL ParseMode = 2
 
-type ByteFinder struct {
-	target byte
-}
-
-func NewByteFinder(target byte) *ByteFinder {
-	return &ByteFinder{target: target}
-}
-
-func (finder ByteFinder) Find(data []byte) (ends []int) {
-	if len(data) > 0 && data[0] == finder.target {
-		ends = []int{1}
+func getBiggest(src []int) (biggest int) {
+	for _, n := range src {
+		if n > biggest {
+			biggest = n
+		}
 	}
 	return
 }
 
-func (finder ByteFinder) Copy() Finder {
-	return NewByteFinder(finder.target)
-}
-
-type BytesFinder struct {
-	target []byte
-}
-
-func NewBytesFinder(target []byte) *BytesFinder {
-	targetCopy := make([]byte, len(target))
-	copy(targetCopy, target)
-	return &BytesFinder{target: targetCopy}
-}
-
-func (finder BytesFinder) Find(data []byte) (ends []int) {
-	if len(finder.target) > len(data) {
-		return []int{}
-	}
-
-	var tmpEnds []int
-	for i, t := range finder.target {
-		byteFinder := ByteFinder{target: t}
+func getSmallest(src []int) (smallest int) {
+	for i, n := range src {
 		if i == 0 {
-			tmpEnds = byteFinder.Find(data)
-		} else {
-			tmpEnds = byteFinder.Find(data[i:])
+			smallest = n
+			continue
 		}
-		if len(tmpEnds) == 0 {
-			return
+		if n < smallest {
+			smallest = n
 		}
 	}
-	ends = []int{len(finder.target)}
 	return
-}
-
-func (finder BytesFinder) Copy() Finder {
-	return NewBytesFinder(finder.target)
-}
-
-// RFC5234 - 2.3. Terminal Values
-// A concatenated string of such values is specified compactly, using a
-// period (".") to indicate a separation of characters within that
-// value.  Hence:
-//
-//  CRLF =  %d13.10
-//
-
-type CrLfFinder struct {
-}
-
-func NewCrLfFinder() *CrLfFinder {
-	return &CrLfFinder{}
-}
-
-func (finder CrLfFinder) Find(data []byte) (ends []int) {
-	bytesFinder := BytesFinder{target: []byte("\r\n")}
-	return bytesFinder.Find(data)
-}
-
-func (finder CrLfFinder) Copy() Finder {
-	return NewCrLfFinder()
-}
-
-// RFC5234 - 3.1. Concatenation: Rule1 Rule2
-// A rule can define a simple, ordered string of values (i.e., a
-// concatenation of contiguous characters) by listing a sequence of rule
-// names. For example:
-//
-//  foo = %x61 ; a
-//  bar = %x62 ; b
-//  mumble = foo bar foo
-//
-// So that the rule <mumble> matches the lowercase string "aba".
-
-type ConcatenationFinder struct {
-	childFinders []Finder
-}
-
-func NewConcatenationFinder(finders []Finder) *ConcatenationFinder {
-	var findersCopy []Finder
-
-	for _, finder := range finders {
-		findersCopy = append(findersCopy, finder.Copy())
-	}
-
-	return &ConcatenationFinder{childFinders: findersCopy}
 }
 
 func sliceUnique(src []int) (unique []int) {
@@ -137,40 +46,119 @@ func sliceUnique(src []int) (unique []int) {
 	return unique
 }
 
-func (finder ConcatenationFinder) Find(data []byte) (ends []int) {
-	for childCount, childFinder := range finder.childFinders {
-		if childCount == 0 {
-			ends = childFinder.Find(data)
-		} else {
-			pastEnds := ends
-			ends = []int{}
-			for _, pastEnd := range pastEnds {
-				var partialEnds []int
-				var remaining []byte
-				if pastEnd == 0 {
-					remaining = data
-				} else {
-					remaining = data[pastEnd:]
-				}
-				partialEnds = childFinder.Find(remaining)
-				for i := 0; i < len(partialEnds); i++ {
-					partialEnds[i] += pastEnd
-				}
-				if len(partialEnds) > 0 {
-					ends = append(ends, partialEnds...)
-				}
-			}
-		}
-		if len(ends) == 0 {
-			return
-		}
+func Parse(data []byte, findFunc FindFunc, mode ParseMode) (results []ParseResult) {
+	ends := findFunc(data)
+	if len(ends) == 0 {
+		return
 	}
-	ends = sliceUnique(ends)
+	if mode == PARSE_LONGEST {
+		longestEnd := getBiggest(ends)
+		ends = []int{longestEnd}
+	} else if mode == PARSE_SHORTEST {
+		shortestEnd := getSmallest(ends)
+		ends = []int{shortestEnd}
+	}
+	for _, end := range ends {
+		parsed := data[:end]
+		remaining := data[end:]
+		results = append(results, ParseResult{Parsed: parsed, Remaining: remaining})
+	}
 	return
 }
 
-func (finder ConcatenationFinder) Copy() Finder {
-	return NewConcatenationFinder(finder.childFinders)
+func NewFindByte(target byte) FindFunc {
+	findByte := func(data []byte) (ends []int) {
+		if len(data) > 0 && data[0] == target {
+			ends = []int{1}
+		}
+		return
+	}
+	return findByte
+}
+
+func NewFindBytes(target []byte) FindFunc {
+	targetCopy := make([]byte, len(target))
+	copy(targetCopy, target)
+	findBytes := func(data []byte) (ends []int) {
+		if len(targetCopy) > len(data) {
+			return []int{}
+		}
+
+		var tmpEnds []int
+		for i, t := range targetCopy {
+			findByte := NewFindByte(t)
+			if i == 0 {
+				tmpEnds = findByte(data)
+			} else {
+				tmpEnds = findByte(data[i:])
+			}
+			if len(tmpEnds) == 0 {
+				return
+			}
+		}
+		ends = []int{len(targetCopy)}
+		return
+	}
+	return findBytes
+}
+
+// RFC5234 - 2.3. Terminal Values
+// A concatenated string of such values is specified compactly, using a
+// period (".") to indicate a separation of characters within that
+// value.  Hence:
+//
+//  CRLF =  %d13.10
+//
+
+func FindCrLf(data []byte) (ends []int) {
+	findCrLf := NewFindBytes([]byte("\r\n"))
+	return findCrLf(data)
+}
+
+// RFC5234 - 3.1. Concatenation: Rule1 Rule2
+// A rule can define a simple, ordered string of values (i.e., a
+// concatenation of contiguous characters) by listing a sequence of rule
+// names. For example:
+//
+//  foo = %x61 ; a
+//  bar = %x62 ; b
+//  mumble = foo bar foo
+//
+// So that the rule <mumble> matches the lowercase string "aba".
+
+func NewFindConcatenation(findFuncs []FindFunc) FindFunc {
+	findConcatenation := func(data []byte) (ends []int) {
+		for childCount, childFindFunc := range findFuncs {
+			if childCount == 0 {
+				ends = childFindFunc(data)
+			} else {
+				pastEnds := ends
+				ends = []int{}
+				for _, pastEnd := range pastEnds {
+					var partialEnds []int
+					var remaining []byte
+					if pastEnd == 0 {
+						remaining = data
+					} else {
+						remaining = data[pastEnd:]
+					}
+					partialEnds = childFindFunc(remaining)
+					for i := 0; i < len(partialEnds); i++ {
+						partialEnds[i] += pastEnd
+					}
+					if len(partialEnds) > 0 {
+						ends = append(ends, partialEnds...)
+					}
+				}
+			}
+			if len(ends) == 0 {
+				return
+			}
+		}
+		ends = sliceUnique(ends)
+		return
+	}
+	return findConcatenation
 }
 
 // RFC5234 - 3.2. Alternatives: Rule1 / Rule2
@@ -181,33 +169,18 @@ func (finder ConcatenationFinder) Copy() Finder {
 //
 // will accept <foo> or <bar>.
 
-type AlternativesFinder struct {
-	childFinders []Finder
-}
-
-func NewAlternativesFinder(finders []Finder) *AlternativesFinder {
-	var findersCopy []Finder
-
-	for _, finder := range finders {
-		findersCopy = append(findersCopy, finder.Copy())
-	}
-
-	return &AlternativesFinder{childFinders: findersCopy}
-}
-
-func (finder AlternativesFinder) Find(data []byte) (ends []int) {
-	var tmpEnds []int
-	for _, child := range finder.childFinders {
-		tmpEnds = child.Find(data)
-		if len(tmpEnds) != 0 {
-			ends = append(ends, tmpEnds...)
+func NewFindAlternatives(findFuncs []FindFunc) FindFunc {
+	findAlternatives := func(data []byte) (ends []int) {
+		var tmpEnds []int
+		for _, childFindFunc := range findFuncs {
+			tmpEnds = childFindFunc(data)
+			if len(tmpEnds) != 0 {
+				ends = append(ends, tmpEnds...)
+			}
 		}
+		return
 	}
-	return
-}
-
-func (finder AlternativesFinder) Copy() Finder {
-	return NewAlternativesFinder(finder.childFinders)
+	return findAlternatives
 }
 
 // RFC5234 - 3.4. Value Range Alternatives: %c##-##
@@ -222,27 +195,17 @@ func (finder AlternativesFinder) Copy() Finder {
 //  DIGIT = "0" / "1" / "2" / "3" / "4" / "5" / "6" / "7" / "8" / "9"
 //
 
-type ValueRangeAlternativesFinder struct {
-	rangeStart byte
-	rangeEnd   byte
-}
-
-func NewValueRangeAlternativesFinder(rangeStart byte, rangeEnd byte) *ValueRangeAlternativesFinder {
-	return &ValueRangeAlternativesFinder{rangeStart: rangeStart, rangeEnd: rangeEnd}
-}
-
-func (finder ValueRangeAlternativesFinder) Find(data []byte) (ends []int) {
-	if len(data) == 0 {
+func NewFindValueRangeAlternatives(rangeStart byte, rangeEnd byte) FindFunc {
+	findValueRangeAlternatives := func(data []byte) (ends []int) {
+		if len(data) == 0 {
+			return
+		}
+		if data[0] >= rangeStart && data[0] <= rangeEnd {
+			ends = []int{1}
+		}
 		return
 	}
-	if data[0] >= finder.rangeStart && data[0] <= finder.rangeEnd {
-		ends = []int{1}
-	}
-	return
-}
-
-func (finder ValueRangeAlternativesFinder) Copy() Finder {
-	return NewValueRangeAlternativesFinder(finder.rangeStart, finder.rangeEnd)
+	return findValueRangeAlternatives
 }
 
 // RFC5234 - 3.6. Variable Repetition: *Rule
@@ -258,64 +221,52 @@ func (finder ValueRangeAlternativesFinder) Copy() Finder {
 // number, including zero; 1*<element> requires at least one;
 // 3*3<element> allows exactly 3; and 1*2<element> allows one or two.
 
-type VariableRepetitionFinder struct {
-	min         int
-	max         int
-	childFinder Finder
-}
+func NewFindVariableRepetitionMinMax(min int, max int, findFunc FindFunc) FindFunc {
+	findVariableRepetitionMinMax := func(data []byte) (ends []int) {
+		if min == 0 {
+			ends = []int{0}
+		}
 
-func NewVariableRepetitionMinMaxFinder(min int, max int, finder Finder) *VariableRepetitionFinder {
-	finderCopy := finder.Copy()
-	return &VariableRepetitionFinder{min: min, max: max, childFinder: finderCopy}
-}
-
-func NewVariableRepetitionMinFinder(min int, finder Finder) *VariableRepetitionFinder {
-	return NewVariableRepetitionMinMaxFinder(min, -1, finder)
-}
-
-func NewVariableRepetitionMaxFinder(max int, finder Finder) *VariableRepetitionFinder {
-	return NewVariableRepetitionMinMaxFinder(0, max, finder)
-}
-
-func NewVariableRepetitionFinder(finder Finder) *VariableRepetitionFinder {
-	return NewVariableRepetitionMinMaxFinder(0, -1, finder)
-}
-
-func (finder *VariableRepetitionFinder) Find(data []byte) (ends []int) {
-	if finder.min == 0 {
-		ends = []int{0}
+		var tmpEnds []int
+		var matchCount int
+		var pastEnd int
+		for {
+			if matchCount == 0 {
+				tmpEnds = findFunc(data)
+			} else {
+				pastEnd = tmpEnds[0]
+				tmpEnds = findFunc(data[pastEnd:])
+			}
+			if len(tmpEnds) == 0 {
+				break
+			}
+			matchCount++
+			tmpEnds[0] += pastEnd
+			if matchCount >= min {
+				ends = append(ends, tmpEnds...)
+			}
+			if max >= 0 && matchCount >= max {
+				break
+			}
+			if tmpEnds[0] >= len(data) {
+				break
+			}
+		}
+		return
 	}
-
-	var tmpEnds []int
-	var matchCount int
-	var pastEnd int
-	for {
-		if matchCount == 0 {
-			tmpEnds = finder.childFinder.Find(data)
-		} else {
-			pastEnd = tmpEnds[0]
-			tmpEnds = finder.childFinder.Find(data[pastEnd:])
-		}
-		if len(tmpEnds) == 0 {
-			break
-		}
-		matchCount++
-		tmpEnds[0] += pastEnd
-		if matchCount >= finder.min {
-			ends = append(ends, tmpEnds...)
-		}
-		if finder.max >= 0 && matchCount >= finder.max {
-			break
-		}
-		if tmpEnds[0] >= len(data) {
-			break
-		}
-	}
-	return
+	return findVariableRepetitionMinMax
 }
 
-func (finder VariableRepetitionFinder) Copy() Finder {
-	return NewVariableRepetitionMinMaxFinder(finder.min, finder.max, finder.childFinder)
+func NewFindVariableRepetitionMin(min int, findFunc FindFunc) FindFunc {
+	return NewFindVariableRepetitionMinMax(min, -1, findFunc)
+}
+
+func NewFindVariableRepetitionMax(max int, findFunc FindFunc) FindFunc {
+	return NewFindVariableRepetitionMinMax(0, max, findFunc)
+}
+
+func NewFindVariableRepetition(findFunc FindFunc) FindFunc {
+	return NewFindVariableRepetitionMinMax(0, -1, findFunc)
 }
 
 // RFC5234 - 3.7. Specific Repetition: nRule
@@ -328,25 +279,14 @@ func (finder VariableRepetitionFinder) Copy() Finder {
 //  <n>*<n>element
 //
 
-type SpecificRepetitionFinder struct {
-	count       int
-	childFinder Finder
-}
-
-func NewSpecificRepetitionFinder(count int, finder Finder) *SpecificRepetitionFinder {
-	finderCopy := finder.Copy()
-	return &SpecificRepetitionFinder{count: count, childFinder: finderCopy}
-}
-
-func (finder SpecificRepetitionFinder) Find(data []byte) []int {
-	min := finder.count
-	max := finder.count
-	variableRepetitionFinder := NewVariableRepetitionMinMaxFinder(min, max, finder.childFinder)
-	return variableRepetitionFinder.Find(data)
-}
-
-func (finder SpecificRepetitionFinder) Copy() Finder {
-	return NewSpecificRepetitionFinder(finder.count, finder.childFinder)
+func NewFindSpecificRepetition(count int, findFunc FindFunc) FindFunc {
+	findSpecificRepetition := func(data []byte) (ends []int) {
+		min := count
+		max := count
+		findVariableRepetition := NewFindVariableRepetitionMinMax(min, max, findFunc)
+		return findVariableRepetition(data)
+	}
+	return findSpecificRepetition
 }
 
 // RFC5234 - 3.8. Optional Sequence: [RULE]
@@ -359,24 +299,14 @@ func (finder SpecificRepetitionFinder) Copy() Finder {
 //  *1(foo bar).
 //
 
-type OptionalSequenceFinder struct {
-	childFinder Finder
-}
-
-func NewOptionalSequenceFinder(finder Finder) *OptionalSequenceFinder {
-	finderCopy := finder.Copy()
-	return &OptionalSequenceFinder{childFinder: finderCopy}
-}
-
-func (finder *OptionalSequenceFinder) Find(data []byte) []int {
-	min := 0
-	max := 1
-	variableRepetitionFinder := NewVariableRepetitionMinMaxFinder(min, max, finder.childFinder)
-	return variableRepetitionFinder.Find(data)
-}
-
-func (finder OptionalSequenceFinder) Copy() Finder {
-	return NewOptionalSequenceFinder(finder.childFinder)
+func NewFindOptionalSequence(findFunc FindFunc) FindFunc {
+	findOptionalSequence := func(data []byte) (ends []int) {
+		min := 0
+		max := 1
+		findVariableRepetition := NewFindVariableRepetitionMinMax(min, max, findFunc)
+		return findVariableRepetition(data)
+	}
+	return findOptionalSequence
 }
 
 // RFC5234 - B.1. Core Rules
@@ -384,23 +314,12 @@ func (finder OptionalSequenceFinder) Copy() Finder {
 //  ALPHA = %x41-5A / %x61-7A ; A-Z / a-z
 //
 
-type AlphaFinder struct {
-}
-
-func NewAlphaFinder() *AlphaFinder {
-	return &AlphaFinder{}
-}
-
-func (finder AlphaFinder) Find(data []byte) []int {
-	alternativesFinder := NewAlternativesFinder([]Finder{
-		NewValueRangeAlternativesFinder(0x41, 0x5a),
-		NewValueRangeAlternativesFinder(0x61, 0x7a),
+func FindAlpha(data []byte) (ends []int) {
+	findAlternatives := NewFindAlternatives([]FindFunc{
+		NewFindValueRangeAlternatives(0x41, 0x5a),
+		NewFindValueRangeAlternatives(0x61, 0x7a),
 	})
-	return alternativesFinder.Find(data)
-}
-
-func (finder AlphaFinder) Copy() Finder {
-	return NewAlphaFinder()
+	return findAlternatives(data)
 }
 
 // RFC5234 - B.1. Core Rules
@@ -408,20 +327,11 @@ func (finder AlphaFinder) Copy() Finder {
 //  DIGIT = %x30-39 ; 0-9
 //
 
-type DigitFinder struct {
-}
-
-func NewDigitFinder() *DigitFinder {
-	return &DigitFinder{}
-}
-
-func (finder DigitFinder) Find(data []byte) []int {
-	valueRangeAlternativesFinder := NewValueRangeAlternativesFinder(0x30, 0x39)
-	return valueRangeAlternativesFinder.Find(data)
-}
-
-func (finder DigitFinder) Copy() Finder {
-	return NewDigitFinder()
+func FindDigit(data []byte) (ends []int) {
+	findAlternatives := NewFindAlternatives([]FindFunc{
+		NewFindValueRangeAlternatives(0x30, 0x39),
+	})
+	return findAlternatives(data)
 }
 
 // RFC5234 - B.1. Core Rules
@@ -430,20 +340,9 @@ func (finder DigitFinder) Copy() Finder {
 //  ; " (Double Quote)
 //
 
-type DQuoteFinder struct {
-}
-
-func NewDQuoteFinder() *DQuoteFinder {
-	return &DQuoteFinder{}
-}
-
-func (finder DQuoteFinder) Find(data []byte) []int {
-	byteFinder := NewByteFinder(0x22)
-	return byteFinder.Find(data)
-}
-
-func (finder DQuoteFinder) Copy() Finder {
-	return NewDQuoteFinder()
+func FindDQuote(data []byte) (ends []int) {
+	findByte := NewFindByte(0x22)
+	return findByte(data)
 }
 
 // RFC5234 - B.1. Core Rules
@@ -451,28 +350,17 @@ func (finder DQuoteFinder) Copy() Finder {
 //  HEXDIG = DIGIT / "A" / "B" / "C" / "D" / "E" / "F"
 //
 
-type HexDigFinder struct {
-}
-
-func NewHexDigFinder() *HexDigFinder {
-	return &HexDigFinder{}
-}
-
-func (finder HexDigFinder) Find(data []byte) []int {
-	alternativesFinder := NewAlternativesFinder([]Finder{
-		NewDigitFinder(),
-		NewByteFinder('A'),
-		NewByteFinder('B'),
-		NewByteFinder('C'),
-		NewByteFinder('D'),
-		NewByteFinder('E'),
-		NewByteFinder('F'),
+func FindHexDig(data []byte) (ends []int) {
+	findAlternatives := NewFindAlternatives([]FindFunc{
+		FindDigit,
+		NewFindByte('A'),
+		NewFindByte('B'),
+		NewFindByte('C'),
+		NewFindByte('D'),
+		NewFindByte('E'),
+		NewFindByte('F'),
 	})
-	return alternativesFinder.Find(data)
-}
-
-func (finder HexDigFinder) Copy() Finder {
-	return *NewHexDigFinder()
+	return findAlternatives(data)
 }
 
 // RFC5234 - B.1. Core Rules
@@ -481,20 +369,9 @@ func (finder HexDigFinder) Copy() Finder {
 //  ; horizontal tab
 //
 
-type HTabFinder struct {
-}
-
-func NewHTabFinder() *HTabFinder {
-	return &HTabFinder{}
-}
-
-func (finder HTabFinder) Find(data []byte) []int {
-	byteFinder := NewByteFinder(0x09)
-	return byteFinder.Find(data)
-}
-
-func (finder HTabFinder) Copy() Finder {
-	return *NewHTabFinder()
+func FindHTab(data []byte) (ends []int) {
+	findByte := NewFindByte(0x09)
+	return findByte(data)
 }
 
 // RFC5234 - B.1. Core Rules
@@ -503,20 +380,9 @@ func (finder HTabFinder) Copy() Finder {
 //  ; 8 bits of data
 //
 
-type OctetFinder struct {
-}
-
-func NewOctetFinder() *OctetFinder {
-	return &OctetFinder{}
-}
-
-func (finder OctetFinder) Find(data []byte) []int {
-	valueRangeAlternativesFinder := NewValueRangeAlternativesFinder(0x00, 0xFF)
-	return valueRangeAlternativesFinder.Find(data)
-}
-
-func (finder OctetFinder) Copy() Finder {
-	return *NewOctetFinder()
+func FindOctet(data []byte) (ends []int) {
+	findValueRangeAlternatives := NewFindValueRangeAlternatives(0x00, 0xFF)
+	return findValueRangeAlternatives(data)
 }
 
 // RFC5234 - B.1. Core Rules
@@ -524,20 +390,9 @@ func (finder OctetFinder) Copy() Finder {
 //  SP =  %x20
 //
 
-type SpFinder struct {
-}
-
-func NewSpFinder() *SpFinder {
-	return &SpFinder{}
-}
-
-func (finder SpFinder) Find(data []byte) []int {
-	byteFinder := NewByteFinder(0x20)
-	return byteFinder.Find(data)
-}
-
-func (finder SpFinder) Copy() Finder {
-	return NewSpFinder()
+func FindSp(data []byte) (ends []int) {
+	findByte := NewFindByte(0x20)
+	return findByte(data)
 }
 
 // RFC5234 - B.1. Core Rules
@@ -546,18 +401,7 @@ func (finder SpFinder) Copy() Finder {
 //  ; visible (printing) characters
 //
 
-type VCharFinder struct {
-}
-
-func NewVCharFinder() *VCharFinder {
-	return &VCharFinder{}
-}
-
-func (finder VCharFinder) Find(data []byte) []int {
-	valueRangeAlternativesFinder := NewValueRangeAlternativesFinder(0x21, 0x7E)
-	return valueRangeAlternativesFinder.Find(data)
-}
-
-func (finder VCharFinder) Copy() Finder {
-	return *NewVCharFinder()
+func FindVChar(data []byte) (ends []int) {
+	findValueRangeAlternatives := NewFindValueRangeAlternatives(0x21, 0x7E)
+	return findValueRangeAlternatives(data)
 }

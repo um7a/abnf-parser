@@ -5,7 +5,7 @@ import "testing"
 type TestCase struct {
 	testName     string
 	data         []byte
-	finder       Finder
+	findFunc     FindFunc
 	expectedEnds []int
 }
 
@@ -20,16 +20,10 @@ func sliceEquals[C comparable](testName string, t *testing.T, expected []C, actu
 	}
 }
 
-func equals[C comparable](testName string, t *testing.T, expected C, actual C) {
-	if actual != expected {
-		t.Errorf("%v: expected: %v, actual: %v", testName, expected, actual)
-	}
-}
-
 func execTest(tests []TestCase, t *testing.T) {
 	for _, testCase := range tests {
 		t.Run(testCase.testName, func(t *testing.T) {
-			actualEnds := testCase.finder.Find(testCase.data)
+			actualEnds := testCase.findFunc(testCase.data)
 			sliceEquals(testCase.testName, t, testCase.expectedEnds, actualEnds)
 		})
 	}
@@ -39,7 +33,8 @@ func TestParse(t *testing.T) {
 	type TestCase struct {
 		testName             string
 		data                 []byte
-		finder               Finder
+		findFunc             FindFunc
+		parseMode            ParseMode
 		expectedParseResults []ParseResult
 	}
 
@@ -47,32 +42,90 @@ func TestParse(t *testing.T) {
 		{
 			testName:             "data: []byte{}, parse \"a\"",
 			data:                 []byte{},
-			finder:               NewByteFinder('a'),
+			findFunc:             NewFindByte('a'),
+			parseMode:            PARSE_LONGEST,
 			expectedParseResults: []ParseResult{},
 		},
 		{
-			testName: "data: []byte(\"a\"), parse \"a\"",
-			data:     []byte("a"),
-			finder:   NewByteFinder('a'),
+			testName:  "data: []byte(\"a\"), parse \"a\"",
+			data:      []byte("a"),
+			findFunc:  NewFindByte('a'),
+			parseMode: PARSE_LONGEST,
 			expectedParseResults: []ParseResult{
 				{Parsed: []byte("a"), Remaining: []byte{}},
 			},
 		},
 		{
-			testName: "data: []byte(\"abc\"), parse \"a\"",
-			data:     []byte("abc"),
-			finder:   NewByteFinder('a'),
+			testName:  "data: []byte(\"abc\"), parse \"a\"",
+			data:      []byte("abc"),
+			findFunc:  NewFindByte('a'),
+			parseMode: PARSE_LONGEST,
 			expectedParseResults: []ParseResult{
 				{Parsed: []byte("a"), Remaining: []byte("bc")},
 			},
 		},
 		{
-			testName: "data: []byte(\"aa\"), parse \"*aa\"",
+			testName:  "data: []byte(\"aa\"), parse \"*a\", mode longest",
+			data:      []byte("aa"),
+			findFunc:  NewFindVariableRepetition(NewFindByte('a')),
+			parseMode: PARSE_LONGEST,
+			expectedParseResults: []ParseResult{
+				{Parsed: []byte("aa"), Remaining: []byte{}},
+			},
+		},
+		{
+			testName:  "data: []byte(\"aa\"), parse \"*a\", mode shortest",
+			data:      []byte("aa"),
+			findFunc:  NewFindVariableRepetition(NewFindByte('a')),
+			parseMode: PARSE_SHORTEST,
+			expectedParseResults: []ParseResult{
+				{Parsed: []byte{}, Remaining: []byte("aa")},
+			},
+		},
+		{
+			testName:  "data: []byte(\"aa\"), parse \"*a\", mode all",
+			data:      []byte("aa"),
+			findFunc:  NewFindVariableRepetition(NewFindByte('a')),
+			parseMode: PARSE_ALL,
+			expectedParseResults: []ParseResult{
+				{Parsed: []byte{}, Remaining: []byte("aa")},
+				{Parsed: []byte("a"), Remaining: []byte("a")},
+				{Parsed: []byte("aa"), Remaining: []byte{}},
+			},
+		},
+
+		{
+			testName: "data: []byte(\"aa\"), parse \"*aa\", mode longest",
 			data:     []byte("aa"),
-			finder: NewConcatenationFinder([]Finder{
-				NewOptionalSequenceFinder(NewByteFinder('a')),
-				NewByteFinder('a'),
+			findFunc: NewFindConcatenation([]FindFunc{
+				NewFindVariableRepetition(NewFindByte('a')),
+				NewFindByte('a'),
 			}),
+			parseMode: PARSE_LONGEST,
+			expectedParseResults: []ParseResult{
+				{Parsed: []byte("aa"), Remaining: []byte{}},
+			},
+		},
+		{
+			testName: "data: []byte(\"aa\"), parse \"*aa\", mode shortest",
+			data:     []byte("aa"),
+			findFunc: NewFindConcatenation([]FindFunc{
+				NewFindVariableRepetition(NewFindByte('a')),
+				NewFindByte('a'),
+			}),
+			parseMode: PARSE_SHORTEST,
+			expectedParseResults: []ParseResult{
+				{Parsed: []byte("a"), Remaining: []byte("a")},
+			},
+		},
+		{
+			testName: "data: []byte(\"aa\"), parse \"*aa\", mode all",
+			data:     []byte("aa"),
+			findFunc: NewFindConcatenation([]FindFunc{
+				NewFindVariableRepetition(NewFindByte('a')),
+				NewFindByte('a'),
+			}),
+			parseMode: PARSE_ALL,
 			expectedParseResults: []ParseResult{
 				{Parsed: []byte("a"), Remaining: []byte("a")},
 				{Parsed: []byte("aa"), Remaining: []byte{}},
@@ -82,7 +135,7 @@ func TestParse(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.testName, func(t *testing.T) {
-			actualParseResults := Parse(testCase.data, testCase.finder)
+			actualParseResults := Parse(testCase.data, testCase.findFunc, testCase.parseMode)
 			if len(testCase.expectedParseResults) != len(actualParseResults) {
 				t.Errorf("%v: expected: %v, actual: %v",
 					testCase.testName,
@@ -108,109 +161,110 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestByteFinder(t *testing.T) {
+func TestFindByte(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, find \"a\"",
 			data:         []byte{},
-			finder:       NewByteFinder('a'),
+			findFunc:     NewFindByte('a'),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"a\"",
 			data:         []byte("a"),
-			finder:       NewByteFinder('a'),
+			findFunc:     NewFindByte('a'),
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"b\"), find \"a\"",
 			data:         []byte("b"),
-			finder:       NewByteFinder('a'),
+			findFunc:     NewFindByte('a'),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"ab\"), find \"a\"",
 			data:         []byte("ab"),
-			finder:       NewByteFinder('a'),
+			findFunc:     NewFindByte('a'),
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"ab\"), find \"b\"",
 			data:         []byte("ab"),
-			finder:       NewByteFinder('b'),
+			findFunc:     NewFindByte('b'),
 			expectedEnds: []int{},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestBytesFinder(t *testing.T) {
+func TestFindBytes(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, find \"ab\"",
 			data:         []byte{},
-			finder:       NewBytesFinder([]byte("ab")),
+			findFunc:     NewFindBytes([]byte("ab")),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"ab\"",
 			data:         []byte("a"),
-			finder:       NewBytesFinder([]byte("ab")),
+			findFunc:     NewFindBytes([]byte("ab")),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"ab\"), find \"ab\"",
 			data:         []byte("ab"),
-			finder:       NewBytesFinder([]byte("ab")),
+			findFunc:     NewFindBytes([]byte("ab")),
 			expectedEnds: []int{2},
 		},
 		{
 			testName:     "data: []byte(\"abc\"), find \"ab\"",
 			data:         []byte("abc"),
-			finder:       NewBytesFinder([]byte("ab")),
+			findFunc:     NewFindBytes([]byte("ab")),
 			expectedEnds: []int{2},
 		},
 		{
 			testName:     "data: []byte(\"abc\"), find \"bc\"",
 			data:         []byte("abc"),
-			finder:       NewBytesFinder([]byte("bc")),
+			findFunc:     NewFindBytes([]byte("bc")),
 			expectedEnds: []int{},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestCrLfFinder(t *testing.T) {
+func TestFindCrLf(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}",
 			data:         []byte{},
-			finder:       NewCrLfFinder(),
+			findFunc:     FindCrLf,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\")",
 			data:         []byte("a"),
-			finder:       NewCrLfFinder(),
+			findFunc:     FindCrLf,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"\\r\")",
 			data:         []byte("\r"),
-			finder:       NewCrLfFinder(),
+			findFunc:     FindCrLf,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"\\r\\n\")",
 			data:         []byte("\r\n"),
-			finder:       NewCrLfFinder(),
+			findFunc:     FindCrLf,
 			expectedEnds: []int{2},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestConcatenationFinder(t *testing.T) {
+/*
+func TestFindConcatenation(t *testing.T) {
 	tests := []TestCase{
 		//
 		// Concatenation: ALPHA ALPHA
@@ -218,57 +272,57 @@ func TestConcatenationFinder(t *testing.T) {
 		{
 			testName: "data: []byte{}, find ALPHA ALPHA",
 			data:     []byte{},
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewAlphaFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindAlpha}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"a\"), find ALPHA ALPHA",
 			data:     []byte{'a'},
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewAlphaFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindAlpha}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"ab\"), find ALPHA ALPHA",
 			data:     []byte("ab"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewAlphaFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindAlpha}),
 			expectedEnds: []int{2},
 		},
 		{
 			testName: "data: []byte(\"1\"), find ALPHA ALPHA",
 			data:     []byte("1"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewAlphaFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindAlpha}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"12\"), find ALPHA ALPHA",
 			data:     []byte("12"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewAlphaFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindAlpha}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"a1\"), find ALPHA ALPHA",
 			data:     []byte("a1"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewAlphaFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindAlpha}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"1a\"), find ALPHA ALPHA",
 			data:     []byte("1a"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewAlphaFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindAlpha}),
 			expectedEnds: []int{},
 		},
 		//
@@ -277,57 +331,64 @@ func TestConcatenationFinder(t *testing.T) {
 		{
 			testName: "data: []byte{}, find ALPHA DIGIT",
 			data:     []byte{},
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewDigitFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindDigit,
+			}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"a\"), find ALPHA DIGIT",
 			data:     []byte("a"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewDigitFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindDigit,
+			}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"ab\"), find ALPHA DIGIT",
 			data:     []byte("ab"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewDigitFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindDigit,
+			}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"1\"), find ALPHA DIGIT",
 			data:     []byte("1"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewDigitFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindDigit,
+			}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"12\"), find ALPHA DIGIT",
 			data:     []byte("12"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewDigitFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindDigit,
+			}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"a1\"), find ALPHA DIGIT",
 			data:     []byte("a1"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewDigitFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindDigit,
+			}),
 			expectedEnds: []int{2},
 		},
 		{
 			testName: "data: []byte(\"1a\")",
 			data:     []byte("1a"),
-			finder: NewConcatenationFinder([]Finder{
-				NewAlphaFinder(),
-				NewDigitFinder()}),
+			findFunc: NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindDigit,
+			}),
 			expectedEnds: []int{},
 		},
 		//
@@ -336,78 +397,79 @@ func TestConcatenationFinder(t *testing.T) {
 		{
 			testName: "data: []byte(\"aa\"), find *ALPHA ALPHA",
 			data:     []byte("aa"),
-			finder: NewConcatenationFinder([]Finder{
-				NewVariableRepetitionFinder(NewAlphaFinder()),
-				NewAlphaFinder(),
+			findFunc: NewFindConcatenation([]FindFunc{
+				NewFindVariableRepetition(FindAlpha),
+				FindAlpha,
 			}),
 			expectedEnds: []int{1, 2},
 		},
 	}
 	execTest(tests, t)
 }
+*/
 
-func TestAlternativesFinder(t *testing.T) {
+func TestFindAlternatives(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName: "data: []byte{}, find a / b",
 			data:     []byte{},
-			finder: NewAlternativesFinder([]Finder{
-				NewByteFinder('a'),
-				NewByteFinder('b'),
+			findFunc: NewFindAlternatives([]FindFunc{
+				NewFindByte('a'),
+				NewFindByte('b'),
 			}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"a\"), find a / b",
 			data:     []byte("a"),
-			finder: NewAlternativesFinder([]Finder{
-				NewByteFinder('a'),
-				NewByteFinder('b'),
+			findFunc: NewFindAlternatives([]FindFunc{
+				NewFindByte('a'),
+				NewFindByte('b'),
 			}),
 			expectedEnds: []int{1},
 		},
 		{
 			testName: "data: []byte(\"ab\"), find a / b",
 			data:     []byte("ab"),
-			finder: NewAlternativesFinder([]Finder{
-				NewByteFinder('a'),
-				NewByteFinder('b'),
+			findFunc: NewFindAlternatives([]FindFunc{
+				NewFindByte('a'),
+				NewFindByte('b'),
 			}),
 			expectedEnds: []int{1},
 		},
 		{
 			testName: "data: []byte(\"b\"), find a / b",
 			data:     []byte("b"),
-			finder: NewAlternativesFinder([]Finder{
-				NewByteFinder('a'),
-				NewByteFinder('b'),
+			findFunc: NewFindAlternatives([]FindFunc{
+				NewFindByte('a'),
+				NewFindByte('b'),
 			}),
 			expectedEnds: []int{1},
 		},
 		{
 			testName: "data: []byte(\"ba\"), find a / b",
 			data:     []byte("ba"),
-			finder: NewAlternativesFinder([]Finder{
-				NewByteFinder('a'),
-				NewByteFinder('b'),
+			findFunc: NewFindAlternatives([]FindFunc{
+				NewFindByte('a'),
+				NewFindByte('b'),
 			}),
 			expectedEnds: []int{1},
 		},
 		{
 			testName: "data: []byte(\"c\"), find a / b",
 			data:     []byte("c"),
-			finder: NewAlternativesFinder([]Finder{
-				NewByteFinder('a'),
-				NewByteFinder('b'),
+			findFunc: NewFindAlternatives([]FindFunc{
+				NewFindByte('a'),
+				NewFindByte('b'),
 			}),
 			expectedEnds: []int{},
 		},
 		{
 			testName: "data: []byte(\"ca\")",
 			data:     []byte("ca"),
-			finder: NewAlternativesFinder([]Finder{
-				NewByteFinder('a'),
-				NewByteFinder('b'),
+			findFunc: NewFindAlternatives([]FindFunc{
+				NewFindByte('a'),
+				NewFindByte('b'),
 			}),
 			expectedEnds: []int{},
 		},
@@ -415,546 +477,546 @@ func TestAlternativesFinder(t *testing.T) {
 	execTest(tests, t)
 }
 
-func TestValueRangeAlternativesFinder(t *testing.T) {
+func TestFindValueRangeAlternatives(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, RangeStart: 'a', RangeEnd 'x'",
 			data:         []byte{},
-			finder:       NewValueRangeAlternativesFinder('a', 'x'),
+			findFunc:     NewFindValueRangeAlternatives('a', 'x'),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), RangeStart: 'a', RangeEnd 'x'",
 			data:         []byte("a"),
-			finder:       NewValueRangeAlternativesFinder('a', 'x'),
+			findFunc:     NewFindValueRangeAlternatives('a', 'x'),
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"x\"), RangeStart: 'a', RangeEnd 'x'",
 			data:         []byte{'x'},
-			finder:       NewValueRangeAlternativesFinder('a', 'x'),
+			findFunc:     NewFindValueRangeAlternatives('a', 'x'),
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"{\"), RangeStart: 'a', RangeEnd 'x'",
 			data:         []byte{'{'},
-			finder:       NewValueRangeAlternativesFinder('a', 'x'),
+			findFunc:     NewFindValueRangeAlternatives('a', 'x'),
 			expectedEnds: []int{},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestVariableRepetitionFinder(t *testing.T) {
+func TestFindVariableRepetition(t *testing.T) {
 	tests := []TestCase{
 		//
-		// NewVariableRepetitionMinMaxFinder
+		// NewFindVariableRepetitionMinMax
 		//
 		{
 			testName:     "data: []byte{}, find \"0*1a\"",
 			data:         []byte{},
-			finder:       NewVariableRepetitionMinMaxFinder(0, 1, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMinMax(0, 1, NewFindByte('a')),
 			expectedEnds: []int{0},
 		},
 		{
 			testName:     "data: []byte{}, find \"1*2a\"",
 			data:         []byte{},
-			finder:       NewVariableRepetitionMinMaxFinder(1, 2, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMinMax(1, 2, NewFindByte('a')),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"1*2a\"",
 			data:         []byte("a"),
-			finder:       NewVariableRepetitionMinMaxFinder(1, 2, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMinMax(1, 2, NewFindByte('a')),
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"2*3a\"",
 			data:         []byte("a"),
-			finder:       NewVariableRepetitionMinMaxFinder(2, 3, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMinMax(2, 3, NewFindByte('a')),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"aa\"), find \"2*3a\"",
 			data:         []byte("aa"),
-			finder:       NewVariableRepetitionMinMaxFinder(2, 3, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMinMax(2, 3, NewFindByte('a')),
 			expectedEnds: []int{2},
 		},
 		{
 			testName:     "data: []byte(\"aaaa\"), find \"2*3a\"",
 			data:         []byte("aaaa"),
-			finder:       NewVariableRepetitionMinMaxFinder(2, 3, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMinMax(2, 3, NewFindByte('a')),
 			expectedEnds: []int{2, 3},
 		},
 		//
-		// NewVariableRepetitionMinFinder
+		// NewFindVariableRepetitionMin
 		//
 		{
 			testName:     "data: []byte{}, find \"0*a\"",
 			data:         []byte{},
-			finder:       NewVariableRepetitionMinFinder(0, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMin(0, NewFindByte('a')),
 			expectedEnds: []int{0},
 		},
 		{
 			testName:     "data: []byte{}, find \"1*a\"",
 			data:         []byte{},
-			finder:       NewVariableRepetitionMinFinder(1, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMin(1, NewFindByte('a')),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"1*a\"",
 			data:         []byte("a"),
-			finder:       NewVariableRepetitionMinFinder(1, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMin(1, NewFindByte('a')),
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"2*a\"",
 			data:         []byte("a"),
-			finder:       NewVariableRepetitionMinFinder(2, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMin(2, NewFindByte('a')),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"aa\"), find \"2*a\"",
 			data:         []byte("aa"),
-			finder:       NewVariableRepetitionMinFinder(2, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMin(2, NewFindByte('a')),
 			expectedEnds: []int{2},
 		},
 		{
 			testName:     "data: []byte(\"aaa\"), find \"2*a\"",
 			data:         []byte("aaa"),
-			finder:       NewVariableRepetitionMinFinder(2, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMin(2, NewFindByte('a')),
 			expectedEnds: []int{2, 3},
 		},
 		//
-		// NewVariableRepetitionMaxFinder
+		// NewFindVariableRepetitionMax
 		//
 		{
 			testName:     "data: []byte{}, find \"*1a\"",
 			data:         []byte{},
-			finder:       NewVariableRepetitionMaxFinder(1, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMax(1, NewFindByte('a')),
 			expectedEnds: []int{0},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"*2a\"",
 			data:         []byte("a"),
-			finder:       NewVariableRepetitionMaxFinder(2, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMax(2, NewFindByte('a')),
 			expectedEnds: []int{0, 1},
 		},
 		{
 			testName:     "data: []byte(\"aa\"), find \"*2a\"",
 			data:         []byte("aa"),
-			finder:       NewVariableRepetitionMaxFinder(2, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMax(2, NewFindByte('a')),
 			expectedEnds: []int{0, 1, 2},
 		},
 		{
 			testName:     "data: []byte(\"aaa\"), find \"*3a\"",
 			data:         []byte("aaa"),
-			finder:       NewVariableRepetitionMaxFinder(3, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMax(3, NewFindByte('a')),
 			expectedEnds: []int{0, 1, 2, 3},
 		},
 		{
 			testName:     "data: []byte(\"aaaa\"), find \"*3a\"",
 			data:         []byte("aaaa"),
-			finder:       NewVariableRepetitionMaxFinder(3, NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetitionMax(3, NewFindByte('a')),
 			expectedEnds: []int{0, 1, 2, 3},
 		},
 		//
-		// NewVariableRepetitionFinder
+		// NewFindVariableRepetition
 		//
 		{
 			testName:     "data: []byte{}, find \"*a\"",
 			data:         []byte{},
-			finder:       NewVariableRepetitionFinder(NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetition(NewFindByte('a')),
 			expectedEnds: []int{0},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"*a\"",
 			data:         []byte("a"),
-			finder:       NewVariableRepetitionFinder(NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetition(NewFindByte('a')),
 			expectedEnds: []int{0, 1},
 		},
 		{
 			testName:     "data: []byte(\"aa\"), find \"*a\"",
 			data:         []byte("aa"),
-			finder:       NewVariableRepetitionFinder(NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetition(NewFindByte('a')),
 			expectedEnds: []int{0, 1, 2},
 		},
 		{
 			testName:     "data: []byte(\"aaa\"), find \"*a\"",
 			data:         []byte("aaa"),
-			finder:       NewVariableRepetitionFinder(NewByteFinder('a')),
+			findFunc:     NewFindVariableRepetition(NewFindByte('a')),
 			expectedEnds: []int{0, 1, 2, 3},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestSpecificRepetitionFinder(t *testing.T) {
+func TestFindSpecificRepetition(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, find \"0a\"",
 			data:         []byte{},
-			finder:       NewSpecificRepetitionFinder(0, NewByteFinder('a')),
+			findFunc:     NewFindSpecificRepetition(0, NewFindByte('a')),
 			expectedEnds: []int{0},
 		},
 		{
 			testName:     "data: []byte{}, find \"1a\"",
 			data:         []byte{},
-			finder:       NewSpecificRepetitionFinder(1, NewByteFinder('a')),
+			findFunc:     NewFindSpecificRepetition(1, NewFindByte('a')),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"1a\"",
 			data:         []byte("a"),
-			finder:       NewSpecificRepetitionFinder(1, NewByteFinder('a')),
+			findFunc:     NewFindSpecificRepetition(1, NewFindByte('a')),
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"ab\"), find \"1a\"",
 			data:         []byte("ab"),
-			finder:       NewSpecificRepetitionFinder(1, NewByteFinder('a')),
+			findFunc:     NewFindSpecificRepetition(1, NewFindByte('a')),
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"2a\"",
 			data:         []byte("a"),
-			finder:       NewSpecificRepetitionFinder(2, NewByteFinder('a')),
+			findFunc:     NewFindSpecificRepetition(2, NewFindByte('a')),
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"aa\"), find \"2a\"",
 			data:         []byte("aa"),
-			finder:       NewSpecificRepetitionFinder(2, NewByteFinder('a')),
+			findFunc:     NewFindSpecificRepetition(2, NewFindByte('a')),
 			expectedEnds: []int{2},
 		},
 		{
 			testName:     "data: []byte(\"aaa\"), find \"2a\"",
 			data:         []byte("aaa"),
-			finder:       NewSpecificRepetitionFinder(2, NewByteFinder('a')),
+			findFunc:     NewFindSpecificRepetition(2, NewFindByte('a')),
 			expectedEnds: []int{2},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestOptionalSequenceFinder(t *testing.T) {
+func TestFindOptionalSequence(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, find \"[ a ]\"",
 			data:         []byte{},
-			finder:       NewOptionalSequenceFinder(NewByteFinder('a')),
+			findFunc:     NewFindOptionalSequence(NewFindByte('a')),
 			expectedEnds: []int{0},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find \"[ a ]\"",
 			data:         []byte("a"),
-			finder:       NewOptionalSequenceFinder(NewByteFinder('a')),
+			findFunc:     NewFindOptionalSequence(NewFindByte('a')),
 			expectedEnds: []int{0, 1},
 		},
 		{
 			testName:     "data: []byte(\"ab\"), find \"[ a ]\"",
 			data:         []byte("ab"),
-			finder:       NewOptionalSequenceFinder(NewByteFinder('a')),
+			findFunc:     NewFindOptionalSequence(NewFindByte('a')),
 			expectedEnds: []int{0, 1},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestAlphaFinder(t *testing.T) {
+func TestFindAlpha(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, find ALPHA",
 			data:         []byte{},
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find ALPHA",
 			data:         []byte("a"),
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"ab\"), find ALPHA",
 			data:         []byte("ab"),
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"1\"), find ALPHA",
 			data:         []byte("1"),
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"12\"), find ALPHA",
 			data:         []byte("12"),
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"A\"), find ALPHA",
 			data:         []byte("A"),
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"AB\"), find ALPHA",
 			data:         []byte("AB"),
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"1A\"), find ALPHA",
 			data:         []byte("1A"),
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a1\"), find ALPHA",
 			data:         []byte("a1"),
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"1A\"), find ALPHA",
 			data:         []byte("1A"),
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"A1\"), find ALPHA",
 			data:         []byte("A1"),
-			finder:       NewAlphaFinder(),
+			findFunc:     FindAlpha,
 			expectedEnds: []int{1},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestDigitFinder(t *testing.T) {
+func TestFindDigit(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, find DIGIT",
 			data:         []byte{},
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find DIGIT",
 			data:         []byte("a"),
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"ab\"), find DIGIT",
 			data:         []byte("ab"),
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"1\"), find DIGIT",
 			data:         []byte("1"),
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"12\"), find DIGIT",
 			data:         []byte("12"),
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"A\"), find DIGIT",
 			data:         []byte("A"),
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"AB\"), find DIGIT",
 			data:         []byte("AB"),
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"1a\"), find DIGIT",
 			data:         []byte("1a"),
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"a1\"), find DIGIT",
 			data:         []byte("a1"),
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"1A\"), find DIGIT",
 			data:         []byte("1A"),
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"A1\"), find DIGIT",
 			data:         []byte("A1"),
-			finder:       NewDigitFinder(),
+			findFunc:     FindDigit,
 			expectedEnds: []int{},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestDQuoteFinder(t *testing.T) {
+func TestFindDQuote(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, find DQUOTE",
 			data:         []byte{},
-			finder:       NewDQuoteFinder(),
+			findFunc:     FindDQuote,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find DQUOTE",
 			data:         []byte("a"),
-			finder:       NewDQuoteFinder(),
+			findFunc:     FindDQuote,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"'\"), find DQUOTE",
 			data:         []byte("'"),
-			finder:       NewDQuoteFinder(),
+			findFunc:     FindDQuote,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"\"\"), find DQUOTE",
 			data:         []byte("\""),
-			finder:       NewDQuoteFinder(),
+			findFunc:     FindDQuote,
 			expectedEnds: []int{1},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestHexDigFinder(t *testing.T) {
+func TestFindHexDig(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, find HEXDIG",
 			data:         []byte{},
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find HEXDIG",
 			data:         []byte("a"),
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"ab\"), find HEXDIG",
 			data:         []byte("ab"),
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"1\"), find HEXDIG",
 			data:         []byte("1"),
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"12\"), find HEXDIG",
 			data:         []byte("12"),
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"A\"), find HEXDIG",
 			data:         []byte("A"),
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"AB\")",
 			data:         []byte("AB"),
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"1a\"), find HEXDIG",
 			data:         []byte("1a"),
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"a1\"), find HEXDIG",
 			data:         []byte("a1"),
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"1A\")",
 			data:         []byte("1A"),
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte(\"A1\")",
 			data:         []byte("A1"),
-			finder:       NewHexDigFinder(),
+			findFunc:     FindHexDig,
 			expectedEnds: []int{1},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestHTabFinder(t *testing.T) {
+func TestFindHTab(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, find HTAB",
 			data:         []byte{},
-			finder:       NewHTabFinder(),
+			findFunc:     FindHTab,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find HTAB",
 			data:         []byte("a"),
-			finder:       NewHTabFinder(),
+			findFunc:     FindHTab,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte{0x20}, find HTAB",
 			data:         []byte{0x20},
-			finder:       NewHTabFinder(),
+			findFunc:     FindHTab,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte{0x09}, find HTAB",
 			data:         []byte{0x09},
-			finder:       NewHTabFinder(),
+			findFunc:     FindHTab,
 			expectedEnds: []int{1},
 		},
 	}
 	execTest(tests, t)
 }
 
-func TestOctetFinder(t *testing.T) {
+func TestFindOctet(t *testing.T) {
 	tests := []TestCase{
 		{
 			testName:     "data: []byte{}, find Octet",
 			data:         []byte{},
-			finder:       NewOctetFinder(),
+			findFunc:     FindOctet,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte{0x00}, find Octet",
 			data:         []byte{0x00},
-			finder:       NewOctetFinder(),
+			findFunc:     FindOctet,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte{0xff}, find Octet",
 			data:         []byte{0xff},
-			finder:       NewOctetFinder(),
+			findFunc:     FindOctet,
 			expectedEnds: []int{1},
 		},
 	}
@@ -966,25 +1028,25 @@ func TestFindSp(t *testing.T) {
 		{
 			testName:     "data: []byte{}, find SP",
 			data:         []byte{},
-			finder:       NewSpFinder(),
+			findFunc:     FindSp,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte(\"a\"), find SP",
 			data:         []byte("a"),
-			finder:       NewSpFinder(),
+			findFunc:     FindSp,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte{0x20}, find SP",
 			data:         []byte{0x20},
-			finder:       NewSpFinder(),
+			findFunc:     FindSp,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte{0x09}, find SP",
 			data:         []byte{0x09},
-			finder:       NewSpFinder(),
+			findFunc:     FindSp,
 			expectedEnds: []int{},
 		},
 	}
@@ -996,31 +1058,31 @@ func TestFindVChar(t *testing.T) {
 		{
 			testName:     "data: []byte{}, find VCHAR",
 			data:         []byte{},
-			finder:       NewVCharFinder(),
+			findFunc:     FindVChar,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte{0x20}, find VCHAR",
 			data:         []byte{0x20},
-			finder:       NewVCharFinder(),
+			findFunc:     FindVChar,
 			expectedEnds: []int{},
 		},
 		{
 			testName:     "data: []byte{0x21}, find VCHAR",
 			data:         []byte{0x21},
-			finder:       NewVCharFinder(),
+			findFunc:     FindVChar,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte{0x7e}, find VCHAR",
 			data:         []byte{0x7e},
-			finder:       NewVCharFinder(),
+			findFunc:     FindVChar,
 			expectedEnds: []int{1},
 		},
 		{
 			testName:     "data: []byte{0x7f}, find VCHAR",
 			data:         []byte{0x7f},
-			finder:       NewVCharFinder(),
+			findFunc:     FindVChar,
 			expectedEnds: []int{},
 		},
 	}

@@ -4,28 +4,28 @@ Go library for Parsing the syntax defined in [ABNF](https://datatracker.ietf.org
 
 ## 1. Concept
 
-### 1.1. Finder
+### 1.1. FindFunc
 
-This library provides Finders.  
-Finder is the struct that has the methods named `Find` and `Copy`.
+This library provides the functions whose types are `FindFunc`.
 
 ```go
-type Finder interface {
-	Find(data []byte) []int
-	Copy() Finder
-}
+type FindFunc func(data []byte) (ends []int)
 ```
 
-#### 1.1.1. Finder.Find
+`FindFunc` finds the specific ABNF syntax such as [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), [DIGIT](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), [Concatenation](https://datatracker.ietf.org/doc/html/rfc5234#section-3.1), [Alternatives](https://datatracker.ietf.org/doc/html/rfc5234#section-3.2), etc. from `data`.  
+If `FindFunc` finds the syntax, it returns the ends of the syntax as `ends`.
 
-`Finder.Find(data)` method finds the specific ABNF syntax such as [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), [DIGIT](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), [Concatenation](https://datatracker.ietf.org/doc/html/rfc5234#section-3.1), [Alternatives](https://datatracker.ietf.org/doc/html/rfc5234#section-3.2), etc. from `data`.  
-If it finds the syntax, it returns `[]int` which has the ends of the syntax.
+#### Example
 
-##### Example
+For example, this library provides `FindAlpha` function.
 
-For example, this library provides `AlphaFinder`.  
-This Finder finds [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
-When you call its `Find` method with data `[]byte{ 'a', 'b', 'c', }`, it search [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from the beginning of `data`. Then it returns `[]int{1}` because `data` has `'a'` at the beginning.
+```go
+func FindAlpha(data []byte) (ends []int)
+```
+
+This function finds [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
+When you call it with data `[]byte{ 'a', 'b', 'c', }`, it search [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from the beginning of `data`.  
+Then it returns `[]int{1}` because `data` has `'a'` at the beginning.
 
 ```go
 package main
@@ -38,14 +38,13 @@ import (
 
 func main() {
 	var data []byte = []byte{'a', 'b', 'c'}
-	alpha := abnfp.NewAlphaFinder()
-	ends := alpha.Find(data)
+	ends := abnfp.FindAlpha(data)
 	fmt.Printf("%v\n", ends) // -> [1]
 }
 ```
 
-Note that `Find` method only finds the syntax at the beginning.  
-This means that when you call `Alpha.Find` method with data `[]byte{ '0', 'a' }`, it doesn't find `'a'` and returns `false` because there is `'0'` at the beginning of `data` and it is not [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1).
+Note that `FindFunc` only finds the syntax at the beginning.  
+This means that when you call `FindAlpha` with data `[]byte{ '0', 'a' }`, it doesn't find `'a'` and returns `[]int{}` because there is `'0'` at the beginning of `data` and it is not [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1).
 
 ```go
 package main
@@ -58,47 +57,21 @@ import (
 
 func main() {
 	var data []byte = []byte{'0', 'a'}
-	alpha := abnfp.NewAlphaFinder()
-	ends := alpha.Find(data)
+	ends := abnfp.FindAlpha(data)
 	fmt.Printf("%v\n", ends) // -> []
-}
-```
-
-#### 1.1.2. Finder.Copy
-
-`Finder.Copy` method returns the copy of the Finder.  
-Some Finders have other finders as its child. it also copies them. Note that this is the deep copy.
-
-##### Example
-
-```go
-package main
-
-import (
-	"fmt"
-
-	abnfp "github.com/um7a/abnf-parser"
-)
-
-func main() {
-	alpha1 := abnfp.NewAlphaFinder()
-	alpha2 := alpha1.Copy()
-
-	var data []byte = []byte{'a', 'b', 'c'}
-	ends := alpha2.Find(data)
-	fmt.Printf("%v\n", ends) // -> [1]
 }
 ```
 
 ### 1.2. Parse
 
-The only utility provided by this library other than `Finder` is `Parse` function.
+The only utility provided by this library other than `FindFunc` is `Parse` function.
 
 ```go
-func Parse(data []byte, finder Finder) (results []ParseResult)
+func Parse(data []byte, findFunc FindFunc, mode ParseMode) (results []ParseResult)
 ```
 
-`Parse` function returns `[]ParseResult`. Its element `ParseResult` is the type like the following.
+This function parses the syntax specified by `finder` from `data []byte`,  
+and it returns `[]ParseResult` whose element `ParseResult` is the type defined as the following.
 
 ```go
 type ParseResult struct {
@@ -107,13 +80,13 @@ type ParseResult struct {
 }
 ```
 
-This function parses the syntax specified by `finder` from `data []byte`.  
-If it finds the syntax, return `ParseResult` whose `Parsed` is the parsed data and `Remaining` is the remaining data.
+`Parsed` is the parsed data and `Remaining` is the remaining data.
 
 #### Example
 
-For example, when `data` is `[]byte{'a', 'b', 'c'}` and `finder` is `AlphaFinder`,  
-`Parse` function parses [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data` and returns `{{Parsed: {'a'}, Remaining: {'b', 'c'}}}`
+For example, when `data` is `[]byte{'a', 'b', 'c'}` and `finder` is `FindAlpha`,  
+`Parse` function parse [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
+Because `'a'` is [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), it returns `[]byte{'a'}` as `Parsed` and `[]byte{'b', 'c'}` as `Remaining`.
 
 ```go
 package main
@@ -126,8 +99,70 @@ import (
 
 func main() {
 	var data []byte = []byte{'a', 'b', 'c'}
-	results := abnfp.Parse(data, abnfp.NewAlphaFinder())
+	results := Parse(data, abnfp.FindAlpha, abnfp.PARSE_LONGEST)
 	fmt.Printf("results: %s\n", results)
 	// -> results: [{a bc}]
 }
+```
+
+#### ParseMode
+
+The third argument of `Parse` function is `ParseMode`.  
+You can use one of the following values.
+
+- `PARSE_LONGEST`
+- `PARSE_SHORTEST`
+- `PARSE_ALL`
+
+Depending on which mode is selected, the result of the `Parse` function will vary.  
+For example, if you parse the data `[]byte{'a', 'b', 'c'}` as the ABNF syntax `*ALPHA`,  
+The parsing results for each mode are as follows.
+
+| mode           | Parsed                                                                             | Remaining                                                                          |
+| -------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| PARSE_LONGEST  | `[]byte{'a', 'b' 'c'}`                                                             | `[]byte{}`                                                                         |
+| PARSE_SHORTEST | `[]byte{}`                                                                         | `[]byte{'a', 'b', 'c'}`                                                            |
+| PARSE_ALL      | `[]byte{}`,</br>`[]byte{'a'}`,</br>`[]byte{'a', 'b'}`,</br>`[]byte{'a', 'b', 'c'}` | `[]byte{'a', 'b', 'c'}`,</br>`[]byte{'b', 'c'}`,</br>`[]byte{'c'}`,</br>`[]byte{}` |
+
+```go
+package main
+
+import (
+	"fmt"
+
+	abnfp "github.com/um7a/abnf-parser"
+)
+
+func main() {
+	var data []byte = []byte{'a', 'b', 'c'}
+	var results []ParseResult
+
+	results = Parse(
+		data,
+		abnfp.NewFindVariableRepetition(abnfp.FindAlpha),
+		abnfp.PARSE_LONGEST)
+
+	for _, result := range results {
+		fmt.Printf("result.Parsed: %s, result.Remaining\n", result.Parsed, result.Remaining)
+	}
+
+	results = Parse(
+		data,
+		abnfp.NewFindVariableRepetition(abnfp.FindAlpha),
+		abnfp.PARSE_SHORTEST)
+
+	for _, result := range results {
+		fmt.Printf("result.Parsed: %s, result.Remaining\n", result.Parsed, result.Remaining)
+	}
+
+	results = Parse(
+		data,
+		abnfp.NewFindVariableRepetition(abnfp.FindAlpha),
+		abnfp.PARSE_ALL)
+
+	for _, result := range results {
+		fmt.Printf("result.Parsed: %s, result.Remaining\n", result.Parsed, result.Remaining)
+	}
+}
+
 ```
