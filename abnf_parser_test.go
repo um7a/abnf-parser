@@ -12,10 +12,12 @@ type TestCase struct {
 func sliceEquals[C comparable](testName string, t *testing.T, expected []C, actual []C) {
 	if len(expected) != len(actual) {
 		t.Errorf("%v: expected: %v, actual: %v", testName, expected, actual)
+		return
 	}
 	for i, e := range expected {
 		if e != actual[i] {
 			t.Errorf("%v: expected: %v, actual: %v", testName, expected, actual)
+			return
 		}
 	}
 }
@@ -263,7 +265,6 @@ func TestFindCrLf(t *testing.T) {
 	execTest(tests, t)
 }
 
-/*
 func TestFindConcatenation(t *testing.T) {
 	tests := []TestCase{
 		//
@@ -274,7 +275,8 @@ func TestFindConcatenation(t *testing.T) {
 			data:     []byte{},
 			findFunc: NewFindConcatenation([]FindFunc{
 				FindAlpha,
-				FindAlpha}),
+				FindAlpha,
+			}),
 			expectedEnds: []int{},
 		},
 		{
@@ -282,7 +284,8 @@ func TestFindConcatenation(t *testing.T) {
 			data:     []byte{'a'},
 			findFunc: NewFindConcatenation([]FindFunc{
 				FindAlpha,
-				FindAlpha}),
+				FindAlpha,
+			}),
 			expectedEnds: []int{},
 		},
 		{
@@ -290,7 +293,8 @@ func TestFindConcatenation(t *testing.T) {
 			data:     []byte("ab"),
 			findFunc: NewFindConcatenation([]FindFunc{
 				FindAlpha,
-				FindAlpha}),
+				FindAlpha,
+			}),
 			expectedEnds: []int{2},
 		},
 		{
@@ -298,7 +302,8 @@ func TestFindConcatenation(t *testing.T) {
 			data:     []byte("1"),
 			findFunc: NewFindConcatenation([]FindFunc{
 				FindAlpha,
-				FindAlpha}),
+				FindAlpha,
+			}),
 			expectedEnds: []int{},
 		},
 		{
@@ -306,7 +311,8 @@ func TestFindConcatenation(t *testing.T) {
 			data:     []byte("12"),
 			findFunc: NewFindConcatenation([]FindFunc{
 				FindAlpha,
-				FindAlpha}),
+				FindAlpha,
+			}),
 			expectedEnds: []int{},
 		},
 		{
@@ -314,7 +320,8 @@ func TestFindConcatenation(t *testing.T) {
 			data:     []byte("a1"),
 			findFunc: NewFindConcatenation([]FindFunc{
 				FindAlpha,
-				FindAlpha}),
+				FindAlpha,
+			}),
 			expectedEnds: []int{},
 		},
 		{
@@ -322,7 +329,8 @@ func TestFindConcatenation(t *testing.T) {
 			data:     []byte("1a"),
 			findFunc: NewFindConcatenation([]FindFunc{
 				FindAlpha,
-				FindAlpha}),
+				FindAlpha,
+			}),
 			expectedEnds: []int{},
 		},
 		//
@@ -406,7 +414,6 @@ func TestFindConcatenation(t *testing.T) {
 	}
 	execTest(tests, t)
 }
-*/
 
 func TestFindAlternatives(t *testing.T) {
 	tests := []TestCase{
@@ -646,6 +653,42 @@ func TestFindVariableRepetition(t *testing.T) {
 			data:         []byte("aaa"),
 			findFunc:     NewFindVariableRepetition(NewFindByte('a')),
 			expectedEnds: []int{0, 1, 2, 3},
+		},
+		//
+		// combination with Concatenation
+		//
+		{
+			testName: "data: []byte(\"a1b2c3\"), find \"*(ALPHA DIGIT)\"",
+			data:     []byte("a1b2c3"),
+			findFunc: NewFindVariableRepetition(NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				FindDigit,
+			})),
+			expectedEnds: []int{
+				0,
+				2,
+				4,
+				6,
+			},
+		},
+		//
+		// combination with Concatenation and VariableRepetition
+		//
+		{
+			testName: "data: []byte(\"a1bc3\"), find \"*(ALPHA *DIGIT)\"",
+			data:     []byte("a1bc3"),
+			findFunc: NewFindVariableRepetition(NewFindConcatenation([]FindFunc{
+				FindAlpha,
+				NewFindVariableRepetition(FindDigit),
+			})),
+			expectedEnds: []int{
+				0, // ""
+				1, // "a"
+				2, // "a1"
+				3, // "a1b"
+				4, // "a1bc"
+				5, // "a1bc3"
+			},
 		},
 	}
 	execTest(tests, t)

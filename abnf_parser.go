@@ -226,29 +226,34 @@ func NewFindVariableRepetitionMinMax(min int, max int, findFunc FindFunc) FindFu
 		if min == 0 {
 			ends = []int{0}
 		}
-
-		var tmpEnds []int
+		var currentEnds []int
 		var matchCount int
-		var pastEnd int
+		var pastEnds []int
 		for {
 			if matchCount == 0 {
-				tmpEnds = findFunc(data)
+				currentEnds = findFunc(data)
 			} else {
-				pastEnd = tmpEnds[0]
-				tmpEnds = findFunc(data[pastEnd:])
+				pastEnds = currentEnds
+				currentEnds = []int{}
+				for _, pastEnd := range pastEnds {
+					currentEndsPerPastEnd := findFunc(data[pastEnd:])
+					if len(currentEndsPerPastEnd) == 0 {
+						continue
+					}
+					for i := 0; i < len(currentEndsPerPastEnd); i++ {
+						currentEndsPerPastEnd[i] += pastEnd
+					}
+					currentEnds = append(currentEnds, currentEndsPerPastEnd...)
+				}
 			}
-			if len(tmpEnds) == 0 {
+			if len(currentEnds) == 0 {
 				break
 			}
 			matchCount++
-			tmpEnds[0] += pastEnd
 			if matchCount >= min {
-				ends = append(ends, tmpEnds...)
+				ends = append(ends, currentEnds...)
 			}
 			if max >= 0 && matchCount >= max {
-				break
-			}
-			if tmpEnds[0] >= len(data) {
 				break
 			}
 		}
