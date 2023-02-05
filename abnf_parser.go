@@ -145,9 +145,17 @@ func NewFindConcatenation(findFuncs []FindFunc) FindFunc {
 					partialEnds = childFindFunc(remaining)
 					for i := 0; i < len(partialEnds); i++ {
 						partialEnds[i] += pastEnd
-					}
-					if len(partialEnds) > 0 {
-						ends = append(ends, partialEnds...)
+
+						exists := false
+						for _, end := range ends {
+							if end == partialEnds[i] {
+								exists = true
+								break
+							}
+						}
+						if !exists {
+							ends = append(ends, partialEnds[i])
+						}
 					}
 				}
 			}
@@ -174,8 +182,17 @@ func NewFindAlternatives(findFuncs []FindFunc) FindFunc {
 		var tmpEnds []int
 		for _, childFindFunc := range findFuncs {
 			tmpEnds = childFindFunc(data)
-			if len(tmpEnds) != 0 {
-				ends = append(ends, tmpEnds...)
+			for _, tmpEnd := range tmpEnds {
+				exists := false
+				for _, end := range ends {
+					if tmpEnd == end {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					ends = append(ends, tmpEnd)
+				}
 			}
 		}
 		return
@@ -251,7 +268,18 @@ func NewFindVariableRepetitionMinMax(min int, max int, findFunc FindFunc) FindFu
 			}
 			matchCount++
 			if matchCount >= min {
-				ends = append(ends, currentEnds...)
+				for _, currentEnd := range currentEnds {
+					exists := false
+					for _, end := range ends {
+						if currentEnd == end {
+							exists = true
+							break
+						}
+					}
+					if !exists {
+						ends = append(ends, currentEnd)
+					}
+				}
 			}
 			if max >= 0 && matchCount >= max {
 				break

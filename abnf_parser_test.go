@@ -411,6 +411,25 @@ func TestFindConcatenation(t *testing.T) {
 			}),
 			expectedEnds: []int{1, 2},
 		},
+		//
+		// Concatenation ( ALPHA | 'a' ) ALPHA
+		//
+		// NOTE
+		// This test is the check that FindConcatenation does not return the duplicated values
+		// as the element of ends.
+		//
+		{
+			testName: "data []byte(\"aa\"), find ( ALPHA | a ) ALPHA",
+			data:     []byte("aa"),
+			findFunc: NewFindConcatenation([]FindFunc{
+				NewFindAlternatives([]FindFunc{
+					FindAlpha,
+					NewFindByte('a'),
+				}),
+				FindAlpha,
+			}),
+			expectedEnds: []int{2},
+		},
 	}
 	execTest(tests, t)
 }
@@ -479,6 +498,22 @@ func TestFindAlternatives(t *testing.T) {
 				NewFindByte('b'),
 			}),
 			expectedEnds: []int{},
+		},
+		//
+		// ( ALPHA | 'a' )
+		//
+		// NOTE
+		// This test is the check that FindAlternatives does not return the duplicated values
+		// as the element of ends.
+		//
+		{
+			testName: "data []byte(\"aa\"), find ( ALPHA | a )",
+			data:     []byte("aa"),
+			findFunc: NewFindAlternatives([]FindFunc{
+				FindAlpha,
+				NewFindByte('a'),
+			}),
+			expectedEnds: []int{1},
 		},
 	}
 	execTest(tests, t)
@@ -658,7 +693,7 @@ func TestFindVariableRepetition(t *testing.T) {
 		// combination with Concatenation
 		//
 		{
-			testName: "data: []byte(\"a1b2c3\"), find \"*(ALPHA DIGIT)\"",
+			testName: "data: []byte(\"a1b2c3\"), find \"*(ALPHA | DIGIT)\"",
 			data:     []byte("a1b2c3"),
 			findFunc: NewFindVariableRepetition(NewFindConcatenation([]FindFunc{
 				FindAlpha,
@@ -688,6 +723,96 @@ func TestFindVariableRepetition(t *testing.T) {
 				3, // "a1b"
 				4, // "a1bc"
 				5, // "a1bc3"
+			},
+		},
+		//
+		// *( ALPHA | 'a' )
+		//
+		// NOTE
+		// This test is the check that FindVariableRepetition does not return the
+		// duplicated values as the element of ends.
+		//
+		{
+			testName: "data []byte(\"aa\"), find *( ALPHA | a )",
+			data:     []byte("aa"),
+			findFunc: NewFindVariableRepetition(
+				NewFindAlternatives([]FindFunc{
+					FindAlpha,
+					NewFindByte('a'),
+				}),
+			),
+			expectedEnds: []int{
+				0, // ""
+				1, // "a"
+				2, // "aa"
+			},
+		},
+		//
+		// 1*( ALPHA | 'a' )
+		//
+		// NOTE
+		// This test is the check that FindVariableRepetition does not return the
+		// duplicated values as the element of ends.
+		//
+		{
+			testName: "data []byte(\"aa\"), find 1*( ALPHA | a )",
+			data:     []byte("aa"),
+			findFunc: NewFindVariableRepetitionMin(
+				1,
+				NewFindAlternatives([]FindFunc{
+					FindAlpha,
+					NewFindByte('a'),
+				}),
+			),
+			expectedEnds: []int{
+				1, // "a"
+				2, // "aa"
+			},
+		},
+		//
+		// *2( ALPHA | 'a' )
+		//
+		// NOTE
+		// This test is the check that FindVariableRepetition does not return the
+		// duplicated values as the element of ends.
+		//
+		{
+			testName: "data []byte(\"aaa\"), find *2( ALPHA | a )",
+			data:     []byte("aaa"),
+			findFunc: NewFindVariableRepetitionMax(
+				2,
+				NewFindAlternatives([]FindFunc{
+					FindAlpha,
+					NewFindByte('a'),
+				}),
+			),
+			expectedEnds: []int{
+				0, // ""
+				1, // "a"
+				2, // "aa"
+			},
+		},
+		//
+		// 1*2( ALPHA | 'a' )
+		//
+		// NOTE
+		// This test is the check that FindVariableRepetition does not return the
+		// duplicated values as the element of ends.
+		//
+		{
+			testName: "data []byte(\"aaa\"), find 1*2( ALPHA | a )",
+			data:     []byte("aaa"),
+			findFunc: NewFindVariableRepetitionMinMax(
+				1,
+				2,
+				NewFindAlternatives([]FindFunc{
+					FindAlpha,
+					NewFindByte('a'),
+				}),
+			),
+			expectedEnds: []int{
+				1, // "a"
+				2, // "aa"
 			},
 		},
 	}
@@ -738,6 +863,22 @@ func TestFindSpecificRepetition(t *testing.T) {
 			findFunc:     NewFindSpecificRepetition(2, NewFindByte('a')),
 			expectedEnds: []int{2},
 		},
+		//
+		// 2( ALPHA | 'a' )
+		//
+		// NOTE
+		// This test is the check that FindSpecificRepetition does not return the
+		// duplicated values as the element of ends.
+		//
+		{
+			testName: "data: []byte(\"aaa\"), find \"2( ALPHA | a )\"",
+			data:     []byte("aaa"),
+			findFunc: NewFindSpecificRepetition(2, NewFindAlternatives([]FindFunc{
+				FindAlpha,
+				NewFindByte('a'),
+			})),
+			expectedEnds: []int{2},
+		},
 	}
 	execTest(tests, t)
 }
@@ -760,6 +901,24 @@ func TestFindOptionalSequence(t *testing.T) {
 			testName:     "data: []byte(\"ab\"), find \"[ a ]\"",
 			data:         []byte("ab"),
 			findFunc:     NewFindOptionalSequence(NewFindByte('a')),
+			expectedEnds: []int{0, 1},
+		},
+		//
+		// [ ALPHA | 'a' ]
+		//
+		// NOTE
+		// This test is the check that FindOptionalSequence does not return the
+		// duplicated values as the element of ends.
+		//
+		{
+			testName: "data: []byte(\"a\"), find \"[ ALPHA | a ]\"",
+			data:     []byte("a"),
+			findFunc: NewFindOptionalSequence(
+				NewFindAlternatives([]FindFunc{
+					FindAlpha,
+					NewFindByte('a'),
+				}),
+			),
 			expectedEnds: []int{0, 1},
 		},
 	}
