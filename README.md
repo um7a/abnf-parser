@@ -100,14 +100,12 @@ import (
 
 func main() {
 	var data []byte = []byte{'a', 'b', 'c'}
-	results := abnfp.ParseLongest(data, abnfp.FindAlpha)
+	result := abnfp.ParseLongest(data, abnfp.FindAlpha)
 
-	fmt.Printf("len(results): %v\n", len(results))
-	// -> len(results): 1
-	fmt.Printf("results[0].Parsed: %s\n", results[0].Parsed)
-	// -> results[0].Parsed: a
-	fmt.Printf("results[0].Remaining: %s\n", results[0].Remaining)
-	// -> results[0].Remaining: bc
+	fmt.Printf("result.Parsed: %s\n", result.Parsed)
+	// -> result.Parsed: a
+	fmt.Printf("result.Remaining: %s\n", result.Remaining)
+	// -> result.Remaining: bc
 }
 ```
 
