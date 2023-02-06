@@ -31,12 +31,11 @@ func execTest(tests []TestCase, t *testing.T) {
 	}
 }
 
-func TestParse(t *testing.T) {
+func TestParseAll(t *testing.T) {
 	type TestCase struct {
 		testName             string
 		data                 []byte
 		findFunc             FindFunc
-		parseMode            ParseMode
 		expectedParseResults []ParseResult
 	}
 
@@ -45,57 +44,34 @@ func TestParse(t *testing.T) {
 			testName:             "data: []byte{}, parse \"a\"",
 			data:                 []byte{},
 			findFunc:             NewFindByte('a'),
-			parseMode:            PARSE_LONGEST,
 			expectedParseResults: []ParseResult{},
 		},
 		{
-			testName:  "data: []byte(\"a\"), parse \"a\"",
-			data:      []byte("a"),
-			findFunc:  NewFindByte('a'),
-			parseMode: PARSE_LONGEST,
+			testName: "data: []byte(\"a\"), parse \"a\"",
+			data:     []byte("a"),
+			findFunc: NewFindByte('a'),
 			expectedParseResults: []ParseResult{
 				{Parsed: []byte("a"), Remaining: []byte{}},
 			},
 		},
 		{
-			testName:  "data: []byte(\"abc\"), parse \"a\"",
-			data:      []byte("abc"),
-			findFunc:  NewFindByte('a'),
-			parseMode: PARSE_LONGEST,
+			testName: "data: []byte(\"abc\"), parse \"a\"",
+			data:     []byte("abc"),
+			findFunc: NewFindByte('a'),
 			expectedParseResults: []ParseResult{
 				{Parsed: []byte("a"), Remaining: []byte("bc")},
 			},
 		},
 		{
-			testName:  "data: []byte(\"aa\"), parse \"*a\", mode longest",
-			data:      []byte("aa"),
-			findFunc:  NewFindVariableRepetition(NewFindByte('a')),
-			parseMode: PARSE_LONGEST,
-			expectedParseResults: []ParseResult{
-				{Parsed: []byte("aa"), Remaining: []byte{}},
-			},
-		},
-		{
-			testName:  "data: []byte(\"aa\"), parse \"*a\", mode shortest",
-			data:      []byte("aa"),
-			findFunc:  NewFindVariableRepetition(NewFindByte('a')),
-			parseMode: PARSE_SHORTEST,
-			expectedParseResults: []ParseResult{
-				{Parsed: []byte{}, Remaining: []byte("aa")},
-			},
-		},
-		{
-			testName:  "data: []byte(\"aa\"), parse \"*a\", mode all",
-			data:      []byte("aa"),
-			findFunc:  NewFindVariableRepetition(NewFindByte('a')),
-			parseMode: PARSE_ALL,
+			testName: "data: []byte(\"aa\"), parse \"*a\", mode longest",
+			data:     []byte("aa"),
+			findFunc: NewFindVariableRepetition(NewFindByte('a')),
 			expectedParseResults: []ParseResult{
 				{Parsed: []byte{}, Remaining: []byte("aa")},
 				{Parsed: []byte("a"), Remaining: []byte("a")},
 				{Parsed: []byte("aa"), Remaining: []byte{}},
 			},
 		},
-
 		{
 			testName: "data: []byte(\"aa\"), parse \"*aa\", mode longest",
 			data:     []byte("aa"),
@@ -103,31 +79,6 @@ func TestParse(t *testing.T) {
 				NewFindVariableRepetition(NewFindByte('a')),
 				NewFindByte('a'),
 			}),
-			parseMode: PARSE_LONGEST,
-			expectedParseResults: []ParseResult{
-				{Parsed: []byte("aa"), Remaining: []byte{}},
-			},
-		},
-		{
-			testName: "data: []byte(\"aa\"), parse \"*aa\", mode shortest",
-			data:     []byte("aa"),
-			findFunc: NewFindConcatenation([]FindFunc{
-				NewFindVariableRepetition(NewFindByte('a')),
-				NewFindByte('a'),
-			}),
-			parseMode: PARSE_SHORTEST,
-			expectedParseResults: []ParseResult{
-				{Parsed: []byte("a"), Remaining: []byte("a")},
-			},
-		},
-		{
-			testName: "data: []byte(\"aa\"), parse \"*aa\", mode all",
-			data:     []byte("aa"),
-			findFunc: NewFindConcatenation([]FindFunc{
-				NewFindVariableRepetition(NewFindByte('a')),
-				NewFindByte('a'),
-			}),
-			parseMode: PARSE_ALL,
 			expectedParseResults: []ParseResult{
 				{Parsed: []byte("a"), Remaining: []byte("a")},
 				{Parsed: []byte("aa"), Remaining: []byte{}},
@@ -137,7 +88,7 @@ func TestParse(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.testName, func(t *testing.T) {
-			actualParseResults := Parse(testCase.data, testCase.findFunc, testCase.parseMode)
+			actualParseResults := ParseAll(testCase.data, testCase.findFunc)
 			if len(testCase.expectedParseResults) != len(actualParseResults) {
 				t.Errorf("%v: expected: %v, actual: %v",
 					testCase.testName,
@@ -159,6 +110,132 @@ func TestParse(t *testing.T) {
 					actualParseResults[i].Remaining,
 				)
 			}
+		})
+	}
+}
+
+func TestParseLongest(t *testing.T) {
+	type TestCase struct {
+		testName            string
+		data                []byte
+		findFunc            FindFunc
+		expectedParseResult ParseResult
+	}
+
+	tests := []TestCase{
+		{
+			testName:            "data: []byte{}, parse \"a\"",
+			data:                []byte{},
+			findFunc:            NewFindByte('a'),
+			expectedParseResult: ParseResult{},
+		},
+		{
+			testName:            "data: []byte(\"a\"), parse \"a\"",
+			data:                []byte("a"),
+			findFunc:            NewFindByte('a'),
+			expectedParseResult: ParseResult{Parsed: []byte("a"), Remaining: []byte{}},
+		},
+		{
+			testName:            "data: []byte(\"abc\"), parse \"a\"",
+			data:                []byte("abc"),
+			findFunc:            NewFindByte('a'),
+			expectedParseResult: ParseResult{Parsed: []byte("a"), Remaining: []byte("bc")},
+		},
+		{
+			testName:            "data: []byte(\"aa\"), parse \"*a\", mode longest",
+			data:                []byte("aa"),
+			findFunc:            NewFindVariableRepetition(NewFindByte('a')),
+			expectedParseResult: ParseResult{Parsed: []byte("aa"), Remaining: []byte{}},
+		},
+		{
+			testName: "data: []byte(\"aa\"), parse \"*aa\", mode longest",
+			data:     []byte("aa"),
+			findFunc: NewFindConcatenation([]FindFunc{
+				NewFindVariableRepetition(NewFindByte('a')),
+				NewFindByte('a'),
+			}),
+			expectedParseResult: ParseResult{Parsed: []byte("aa"), Remaining: []byte{}},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			actualParseResult := ParseLongest(testCase.data, testCase.findFunc)
+			sliceEquals(
+				testCase.testName,
+				t,
+				testCase.expectedParseResult.Parsed,
+				actualParseResult.Parsed,
+			)
+			sliceEquals(
+				testCase.testName,
+				t,
+				testCase.expectedParseResult.Remaining,
+				actualParseResult.Remaining,
+			)
+		})
+	}
+}
+
+func TestParseShortest(t *testing.T) {
+	type TestCase struct {
+		testName            string
+		data                []byte
+		findFunc            FindFunc
+		expectedParseResult ParseResult
+	}
+
+	tests := []TestCase{
+		{
+			testName:            "data: []byte{}, parse \"a\"",
+			data:                []byte{},
+			findFunc:            NewFindByte('a'),
+			expectedParseResult: ParseResult{},
+		},
+		{
+			testName:            "data: []byte(\"a\"), parse \"a\"",
+			data:                []byte("a"),
+			findFunc:            NewFindByte('a'),
+			expectedParseResult: ParseResult{Parsed: []byte("a"), Remaining: []byte{}},
+		},
+		{
+			testName:            "data: []byte(\"abc\"), parse \"a\"",
+			data:                []byte("abc"),
+			findFunc:            NewFindByte('a'),
+			expectedParseResult: ParseResult{Parsed: []byte("a"), Remaining: []byte("bc")},
+		},
+		{
+			testName:            "data: []byte(\"aa\"), parse \"*a\", mode longest",
+			data:                []byte("aa"),
+			findFunc:            NewFindVariableRepetition(NewFindByte('a')),
+			expectedParseResult: ParseResult{Parsed: []byte{}, Remaining: []byte("aa")},
+		},
+		{
+			testName: "data: []byte(\"aa\"), parse \"*aa\", mode longest",
+			data:     []byte("aa"),
+			findFunc: NewFindConcatenation([]FindFunc{
+				NewFindVariableRepetition(NewFindByte('a')),
+				NewFindByte('a'),
+			}),
+			expectedParseResult: ParseResult{Parsed: []byte("a"), Remaining: []byte("a")},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.testName, func(t *testing.T) {
+			actualParseResult := ParseShortest(testCase.data, testCase.findFunc)
+			sliceEquals(
+				testCase.testName,
+				t,
+				testCase.expectedParseResult.Parsed,
+				actualParseResult.Parsed,
+			)
+			sliceEquals(
+				testCase.testName,
+				t,
+				testCase.expectedParseResult.Remaining,
+				actualParseResult.Remaining,
+			)
 		})
 	}
 }

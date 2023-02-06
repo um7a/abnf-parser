@@ -62,16 +62,17 @@ func main() {
 }
 ```
 
-### 1.2. Parse
+### 1.2. Parse functions
 
-The only utility provided by this library other than `FindFunc` is `Parse` function.
+The only utilities provided by this library other than `FindFunc` are the Parse functions.
 
 ```go
-func Parse(data []byte, findFunc FindFunc, mode ParseMode) (results []ParseResult)
+func ParseLongest(data []byte, findFunc FindFunc) (result ParseResult)
+func ParseShortest(data []byte, findFunc FindFunc) (result ParseResult)
+func ParseAll(data []byte, findFunc FindFunc) (results []ParseResult)
 ```
 
-This function parses the syntax specified by `finder` from `data []byte`,  
-and it returns `[]ParseResult` whose element `ParseResult` is the type defined as the following.
+This functions parse the syntax specified by `findFunc` from `data` and it returns `ParseResult`.
 
 ```go
 type ParseResult struct {
@@ -84,8 +85,8 @@ type ParseResult struct {
 
 #### Example
 
-For example, when `data` is `[]byte{'a', 'b', 'c'}` and `finder` is `FindAlpha`,  
-`Parse` function parse [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
+For example, when `data` is `[]byte{'a', 'b', 'c'}` and `findFunc` is `FindAlpha`,  
+`ParseLongest` function parse [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1) from `data`.  
 Because `'a'` is [ALPHA](https://datatracker.ietf.org/doc/html/rfc5234#appendix-B.1), it returns `[]byte{'a'}` as `Parsed` and `[]byte{'b', 'c'}` as `Remaining`.
 
 ```go
@@ -99,7 +100,7 @@ import (
 
 func main() {
 	var data []byte = []byte{'a', 'b', 'c'}
-	results := abnfp.Parse(data, abnfp.FindAlpha, abnfp.PARSE_LONGEST)
+	results := abnfp.ParseLongest(data, abnfp.FindAlpha)
 
 	fmt.Printf("len(results): %v\n", len(results))
 	// -> len(results): 1
@@ -110,24 +111,15 @@ func main() {
 }
 ```
 
-#### ParseMode
-
-The third argument of `Parse` function is `ParseMode`.  
-You can use one of the following values.
-
-- `PARSE_LONGEST`
-- `PARSE_SHORTEST`
-- `PARSE_ALL`
-
-Depending on which mode is selected, the result of the `Parse` function will vary.  
+Depending on which Parse function is selected, the result will vary.  
 For example, if you parse the data `[]byte{'a', 'b', 'c'}` as the ABNF syntax `*ALPHA`,  
-The parsing results for each mode are as follows.
+The parsing result for each function is as follows.
 
-| mode           | Parsed                                                                             | Remaining                                                                          |
-| -------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| PARSE_LONGEST  | `[]byte{'a', 'b' 'c'}`                                                             | `[]byte{}`                                                                         |
-| PARSE_SHORTEST | `[]byte{}`                                                                         | `[]byte{'a', 'b', 'c'}`                                                            |
-| PARSE_ALL      | `[]byte{}`,</br>`[]byte{'a'}`,</br>`[]byte{'a', 'b'}`,</br>`[]byte{'a', 'b', 'c'}` | `[]byte{'a', 'b', 'c'}`,</br>`[]byte{'b', 'c'}`,</br>`[]byte{'c'}`,</br>`[]byte{}` |
+| mode            | Parsed                                                                             | Remaining                                                                          |
+| --------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `ParseLongest`  | `[]byte{'a', 'b' 'c'}`                                                             | `[]byte{}`                                                                         |
+| `ParseShortest` | `[]byte{}`                                                                         | `[]byte{'a', 'b', 'c'}`                                                            |
+| `ParseAll`      | `[]byte{}`,</br>`[]byte{'a'}`,</br>`[]byte{'a', 'b'}`,</br>`[]byte{'a', 'b', 'c'}` | `[]byte{'a', 'b', 'c'}`,</br>`[]byte{'b', 'c'}`,</br>`[]byte{'c'}`,</br>`[]byte{}` |
 
 ```go
 package main
@@ -140,30 +132,25 @@ import (
 
 func main() {
 	var data []byte = []byte{'a', 'b', 'c'}
-	var results []abnfp.ParseResult
 
-	results = abnfp.Parse(
+	result := abnfp.ParseLongest(
 		data,
 		abnfp.NewFindVariableRepetition(abnfp.FindAlpha),
-		abnfp.PARSE_LONGEST)
-	for _, result := range results {
-		fmt.Printf("result.Parsed: %s, result.Remaining: %s\n", result.Parsed, result.Remaining)
-	}
+	)
+	fmt.Printf("result.Parsed: %s, result.Remaining: %s\n", result.Parsed, result.Remaining)
 	// -> result.Parsed: abc, result.Remaining:
 
-	results = abnfp.Parse(
+	result = abnfp.ParseShortest(
 		data,
 		abnfp.NewFindVariableRepetition(abnfp.FindAlpha),
-		abnfp.PARSE_SHORTEST)
-	for _, result := range results {
-		fmt.Printf("result.Parsed: %s, result.Remaining: %s\n", result.Parsed, result.Remaining)
-	}
+	)
+	fmt.Printf("result.Parsed: %s, result.Remaining: %s\n", result.Parsed, result.Remaining)
 	// -> result.Parsed: , result.Remaining: abc
 
-	results = abnfp.Parse(
+	results := abnfp.ParseAll(
 		data,
 		abnfp.NewFindVariableRepetition(abnfp.FindAlpha),
-		abnfp.PARSE_ALL)
+	)
 	for _, result := range results {
 		fmt.Printf("result.Parsed: %s, result.Remaining: %s\n", result.Parsed, result.Remaining)
 	}

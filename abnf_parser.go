@@ -9,10 +9,6 @@ type ParseResult struct {
 
 type FindFunc func(data []byte) (ends []int)
 
-var PARSE_LONGEST ParseMode = 0
-var PARSE_SHORTEST ParseMode = 1
-var PARSE_ALL ParseMode = 2
-
 func getBiggest(src []int) (biggest int) {
 	for _, n := range src {
 		if n > biggest {
@@ -46,23 +42,43 @@ func sliceUnique(src []int) (unique []int) {
 	return unique
 }
 
-func Parse(data []byte, findFunc FindFunc, mode ParseMode) (results []ParseResult) {
+func ParseAll(data []byte, findFunc FindFunc) (results []ParseResult) {
 	ends := findFunc(data)
 	if len(ends) == 0 {
 		return
-	}
-	if mode == PARSE_LONGEST {
-		longestEnd := getBiggest(ends)
-		ends = []int{longestEnd}
-	} else if mode == PARSE_SHORTEST {
-		shortestEnd := getSmallest(ends)
-		ends = []int{shortestEnd}
 	}
 	for _, end := range ends {
 		parsed := data[:end]
 		remaining := data[end:]
 		results = append(results, ParseResult{Parsed: parsed, Remaining: remaining})
 	}
+	return
+}
+
+func ParseLongest(data []byte, findFunc FindFunc) (result ParseResult) {
+	ends := findFunc(data)
+	if len(ends) == 0 {
+		return
+	}
+	end := getBiggest(ends)
+
+	parsed := data[:end]
+	remaining := data[end:]
+	result = ParseResult{Parsed: parsed, Remaining: remaining}
+	return
+}
+
+func ParseShortest(data []byte, findFunc FindFunc) (result ParseResult) {
+	ends := findFunc(data)
+	if len(ends) == 0 {
+		return
+	}
+
+	end := getSmallest(ends)
+
+	parsed := data[:end]
+	remaining := data[end:]
+	result = ParseResult{Parsed: parsed, Remaining: remaining}
 	return
 }
 
