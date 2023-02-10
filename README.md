@@ -66,7 +66,7 @@ func main() {
 
 	var data []byte = []byte{'a', 'b', 'c'}
 	found, end := alpha2.Find(data)
-	fmt.Printf("%v, %v\n", ends) // -> true, 1
+	fmt.Printf("%v, %v\n", found, end) // -> true, 1
 }
 ```
 
