@@ -1,7 +1,5 @@
 package abnfp
 
-import "fmt"
-
 type ParseResult struct {
 	Parsed    []byte
 	Remaining []byte
@@ -124,7 +122,6 @@ func (finder *ConcatenationFinder) Find(data []byte) (found bool, end int) {
 	remaining := data
 
 	for i := 0; i < len(finder.childFinders); i++ {
-		fmt.Printf("### data: %s, remaining: %s, i: %v\n", data, remaining, i)
 		// If the childFinder has already calculated, skip.
 		if len(finder.childEnds) > i {
 			remaining = remaining[finder.childEnds[i]:]
@@ -133,7 +130,6 @@ func (finder *ConcatenationFinder) Find(data []byte) (found bool, end int) {
 
 		childFinder := finder.childFinders[i]
 		childFound, childEnd := childFinder.Find(remaining)
-		fmt.Printf("### finder count : %v, found : %v, end : %v\n", i, childFound, childEnd)
 		if childFound {
 			remaining = remaining[childEnd:]
 			if i != 0 {
@@ -142,9 +138,7 @@ func (finder *ConcatenationFinder) Find(data []byte) (found bool, end int) {
 			finder.childEnds = append(finder.childEnds, childEnd)
 			continue
 		}
-		fmt.Printf("### call Recalculate. data : %v\n", data)
 		otherFound, _ := finder.Recalculate(data)
-		fmt.Printf("### return from Recalculate. result: %v\n", otherFound)
 		if otherFound {
 			return finder.Find(data)
 		} else {
@@ -179,7 +173,6 @@ func (finder *ConcatenationFinder) Recalculate(data []byte) (found bool, end int
 		switch cf := childFinder.(type) {
 		case VariableFinder:
 			otherFound, otherEnd := cf.Recalculate(remaining)
-			fmt.Printf("### VariableFinder found. otherFound: %v, otherEnd: %v\n", otherFound, otherEnd)
 			if !otherFound {
 				continue
 			}
@@ -360,9 +353,7 @@ func (finder *VariableRepetitionMinMaxFinder) Recalculate(data []byte) (found bo
 	if len(finder.childEnds) == 1 {
 		return false, 0
 	}
-	fmt.Printf("### len(finder.childEnds): %v\n", len(finder.childEnds))
 	finder.childEnds = finder.childEnds[:len(finder.childEnds)-1]
-	fmt.Printf("### len(finder.childEnds): %v\n", len(finder.childEnds))
 	return true, finder.childEnds[len(finder.childEnds)-1]
 }
 
