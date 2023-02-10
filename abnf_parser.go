@@ -1,5 +1,7 @@
 package abnfp
 
+import "fmt"
+
 type ParseResult struct {
 	Parsed    []byte
 	Remaining []byte
@@ -14,6 +16,14 @@ type VariableFinder interface {
 type Finder interface {
 	Find(data []byte) (found bool, end int)
 	Copy() Finder
+}
+
+var Debug bool = false
+
+func DebugLog(format string, params ...any) {
+	if Debug {
+		fmt.Printf(format, params...)
+	}
 }
 
 func Parse(data []byte, finder Finder) (parsed []byte, remaining []byte) {
@@ -119,32 +129,29 @@ type ConcatenationFinder struct {
 }
 
 func (finder *ConcatenationFinder) Find(data []byte) (found bool, end int) {
+	DebugLog("Concatenation.Find() start.\n")
+	finder.childEnds = []int{}
 	remaining := data
-
 	for i := 0; i < len(finder.childFinders); i++ {
-		// If the childFinder has already calculated, skip.
-		if len(finder.childEnds) > i {
-			remaining = remaining[finder.childEnds[i]:]
-			continue
-		}
-
+		DebugLog("Concatenation.Find() execute childFinders[%v]\n", i)
 		childFinder := finder.childFinders[i]
 		childFound, childEnd := childFinder.Find(remaining)
-		if childFound {
-			remaining = remaining[childEnd:]
-			if i != 0 {
-				childEnd += finder.childEnds[i-1]
+		if !childFound {
+			DebugLog("Concatenation.Find() execute childFinders[%v] failed. Execute Recalculate().\n", i)
+			found, end = finder.Recalculate(data)
+			if found {
+				DebugLog("Concatenation.Recalculate() success. Final end is %v. childEnds is  %v.\n", end, finder.childEnds)
 			}
-			finder.childEnds = append(finder.childEnds, childEnd)
-			continue
+			return
 		}
-		otherFound, _ := finder.Recalculate(data)
-		if otherFound {
-			return finder.Find(data)
-		} else {
-			return false, 0
+		DebugLog("ChildFinders[%v] found the syntax. input is %s, end is %v.\n", i, remaining, childEnd)
+		remaining = remaining[childEnd:]
+		if i != 0 {
+			childEnd += finder.childEnds[i-1]
 		}
+		finder.childEnds = append(finder.childEnds, childEnd)
 	}
+	DebugLog("Concatenation.Find() finish. Final childEnds is %v.\n", finder.childEnds)
 	return true, finder.childEnds[len(finder.childEnds)-1]
 }
 
@@ -157,31 +164,59 @@ func (finder ConcatenationFinder) Copy() Finder {
 }
 
 func (finder *ConcatenationFinder) Recalculate(data []byte) (found bool, end int) {
+	DebugLog("Concatenation.Recalculate() start.\n")
 	var remaining []byte
 	childEnds := finder.childEnds
 	for i := len(finder.childEnds) - 1; i >= 0; i-- {
+		DebugLog("Recalculate childFinders[%v].\n", i)
 		// restore remaining and childEnds
 		if i == 0 {
 			remaining = data
 			childEnds = []int{}
 		} else {
-			remaining = data[childEnds[i-1]:]
-			childEnds = childEnds[:i]
+			remaining = data[finder.childEnds[i-1]:]
+			childEnds = finder.childEnds[:i]
 		}
+		DebugLog("Restored remaining: %s. Restored childEnds: %v.\n", remaining, childEnds)
 
 		childFinder := finder.childFinders[i]
 		switch cf := childFinder.(type) {
 		case VariableFinder:
 			otherFound, otherEnd := cf.Recalculate(remaining)
 			if !otherFound {
+				DebugLog("childFinders[%v] could not find another data.\n", i)
 				continue
 			}
+			DebugLog("childFinders[%v] found another data. Input is %s, end is %v.\n", i, remaining, otherEnd)
 			if i != 0 {
 				otherEnd += childEnds[i-1]
 			}
+
+			remainingChildFinders := finder.childFinders[i+1:]
+			DebugLog("Check that the remaining finders can find each syntax. Number of remaining finders is %v\n", len(remainingChildFinders))
+			remainingConcatenationFinder := NewConcatenationFinder(remainingChildFinders)
+			remainingFound, j := remainingConcatenationFinder.Find(data[otherEnd:])
+			if !remainingFound {
+				DebugLog("The remainingFinders[%v] could not find the syntax. Recalculate childFinders[%v] one more time.\n", j, i)
+				i++ // The current cf has other choice. So recalculate one more time.
+				continue
+			}
+
+			DebugLog("All remainingFinders found the syntax. Recalculation success.\n")
+			// Merge childEnds
 			childEnds = append(childEnds, otherEnd)
+			for _, remainingEnd := range remainingConcatenationFinder.childEnds {
+				remainingEnd += otherEnd
+				childEnds = append(childEnds, remainingEnd)
+			}
 			finder.childEnds = childEnds
-			return true, otherEnd
+
+			// Merge childFinders
+			finder.childFinders = finder.childFinders[:i+1]
+			for _, remainingFinder := range remainingConcatenationFinder.childFinders {
+				finder.childFinders = append(finder.childFinders, remainingFinder)
+			}
+			return true, finder.childEnds[len(finder.childEnds)-1]
 		}
 	}
 	return false, 0

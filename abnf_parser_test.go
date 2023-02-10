@@ -1,6 +1,9 @@
 package abnfp
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 type TestCase struct {
 	testName      string
@@ -37,6 +40,12 @@ func execFinderTest(tests []TestCase, t *testing.T) {
 			equals(testCase.testName, t, testCase.expectedEnd, actualEnd)
 		})
 	}
+}
+
+func TestMain(m *testing.M) {
+	Debug = true
+	code := m.Run()
+	os.Exit(code)
 }
 
 func TestParse(t *testing.T) {
@@ -225,6 +234,7 @@ func TestCrLfFinder(t *testing.T) {
 }
 
 func TestConcatenationFinder(t *testing.T) {
+
 	tests := []TestCase{
 		//
 		// Concatenation: ALPHA ALPHA
